@@ -40,7 +40,7 @@ export type YoutubeChannel = {
 }
 
 // much slower, but we need the URLs
-async function youtube_channel(channel_id: string): Promise<YoutubeChannel> {
+export async function youtube_channel(channel_id: string): Promise<YoutubeChannel> {
 	const resp = await fetch(`https://yt.lemnoslife.com/channels?part=snippet,about&id=${channel_id}`)
 	const json = await resp.json() as any
 	const inner = json.items[0]
@@ -79,7 +79,9 @@ export type YoutubeVideo = {
 const default_key = atob('QUl6YVN5QVNUTVFjay1qdHRGOHF5OXJ0RW50MUh5RVl3NUFtaEU4')
 
 // magnitudes faster
-async function youtube_video(video_id: string): Promise<YoutubeVideo> {
+export async function youtube_video(video_id: string): Promise<YoutubeVideo> {
+	// their API is sloooowww
+	//const resp = await fetch(`https://yt.lemnoslife.com/noKey/videos?id=${video_id}&part=snippet`, {
 	const resp = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${default_key}&id=${video_id}&part=snippet`, {
 		headers: {
 			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
@@ -90,4 +92,24 @@ async function youtube_video(video_id: string): Promise<YoutubeVideo> {
 	const json = await resp.json() as any
 	const inner = json.items[0]
 	return inner.snippet
+}
+
+export function youtube_id_from_url(video_url: string): string | undefined {
+	const regex =  [
+		/(?:http[s]?:\/\/)?(?:\w+\.)?youtube.com\/watch\?v=([\w_-]+)(?:[\/&].*)?/i,
+		/(?:http[s]?:\/\/)?(?:\w+\.)?youtube.com\/(?:v|embed|shorts|video|watch|live)\/([\w_-]+)(?:[\/&].*)?/i,
+		/(?:http[s]?:\/\/)?youtu.be\/([\w_-]+)(?:\?.*)?/i,
+		/(?:http[s]?:\/\/)?filmot.com\/video\/([\w_-]+)(?:[?\/&].*)?/i,
+		/(?:http[s]?:\/\/)?filmot.com\/sidebyside\/([\w_-]+)(?:[?\/&].*)?/i,
+		/^([\w-]{11})$/i
+	]
+
+	for (const pattern of regex) {
+		const match = video_url.match(pattern)
+		if (match && match[1]) {
+			return match[1]
+		}
+	}
+
+	return undefined
 }
