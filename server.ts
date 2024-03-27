@@ -57,12 +57,57 @@ export async function busy_wait_for_users() {
 	}
 }
 
-export function emit_html(message: string) {
+function emit_raw_html(message: string) {
 	for (const ws of sockets) {
 		ws.send(message)
 	}
 }
 
-export function emit_log(message: string) {
-	emit_html(`<div id="log" hx-swap-oob="afterend"><div class="box">${message}</div></div>`)
+let nprogid = 0
+
+class ProgressRef {
+	ref: number
+	private _inv: boolean
+
+	constructor() {
+		this.ref = nprogid++
+		this._inv = false
+	}
+
+	emit(progress: number) {
+		// i don't think HTMX will even perform a DOM update when an invalid (id not found) progress is emitted
+		if (this._inv) {
+			throw new Error("ProgressRef: emit() called when invalidated")
+		}
+
+		const need_to_remove = progress >= 100
+		progress = Math.min(Math.max(progress, 0), 100) // clamp
+
+		let progress_bar = `<div class="prog" style="width: ${progress}%;" id="p${this.ref}"></div>`
+
+		emit_raw_html(progress_bar)
+
+		if (need_to_remove) {
+			this._inv = true
+			///_hyperscript
+			console.log('remove')
+			//progress_bar += `<div _="on htmx:afterSettle 1 remove #b${this.ref}">`
+			const k = `<div _="on htmx:afterSettle 1 remove #b${this.ref}">`
+			emit_raw_html(k)
+		}
+
+	}
 }
+
+export function emit_progress(message: string): ProgressRef {
+	const p = new ProgressRef()
+	const progress_bar = `<div class="prog" style="width: 75%;" id="p${p.ref}"></div>`
+	emit_html_prepend(`<div class="box" id="b${p.ref}"><p>${message}</p>${progress_bar}</div>`)
+	return p
+}
+
+function emit_html_prepend(message: string) {
+	emit_raw_html(`<div id="log" hx-swap-oob="afterend">${message}</div>`)
+}
+
+// TODO: add emit_log()

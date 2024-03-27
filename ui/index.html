@@ -27,6 +27,7 @@
 		}
 		p {
 			margin: 1px;
+			color: white;
 		}
 		.splitter {
 			width: 1px;
@@ -69,7 +70,7 @@
 
 	</div>
 	<div class="splitter"></div>
-	<div class="right" hx-ext="ws" ws-connect="/api/ws">
+	<div class="right" hx-ext="ws, remove-me" ws-connect="/api/ws">
 		<div id="log"></div>
 	</div>
 </body>
