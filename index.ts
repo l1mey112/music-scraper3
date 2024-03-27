@@ -16,12 +16,13 @@ for (const ws of sockets) {
 	ws.send(`<div class="box" id="p0">progress 150</div>`)
 } */
 
-import { busy_wait_for_users, emit_progress } from "./server";
+import { busy_wait_for_users, ProgressRef } from "./server";
 
 await busy_wait_for_users()
 
+
 while (true) {
-	const p = emit_progress("progress count")
+	const p = new ProgressRef("progress count")
 
 	let i = 0
 	while (true) {

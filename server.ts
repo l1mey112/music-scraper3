@@ -65,49 +65,56 @@ function emit_raw_html(message: string) {
 
 let nprogid = 0
 
-class ProgressRef {
+export class ProgressRef {
 	ref: number
+	message: string
+	progress: number
 	private _inv: boolean
 
-	constructor() {
+	constructor(message: string) {
 		this.ref = nprogid++
+		this.message = message
 		this._inv = false
+		this.progress = 0
+		
+		emit_html_prepend(`${this}`)
+	}
+
+	toString() {
+		// random animation duration jittering around 1s
+		const time = 1 + Math.random() * 0.5
+
+		const remove_me = this.progress == 100 ? ` remove-me="${time}s"` : ``
+		const progress_bar = `<div class="box"${remove_me} id="b${this.ref}"><p>${this.message}</p><div class="prog" style="width: ${this.progress}%;" id="p${this.ref}"></div></div>`
+
+		return progress_bar
 	}
 
 	emit(progress: number) {
+		this.progress = Math.min(Math.max(progress, 0), 100) // clamp
+
 		// i don't think HTMX will even perform a DOM update when an invalid (id not found) progress is emitted
 		if (this._inv) {
 			throw new Error("ProgressRef: emit() called when invalidated")
 		}
 
-		const need_to_remove = progress >= 100
-		progress = Math.min(Math.max(progress, 0), 100) // clamp
+		emit_raw_html(`${this}`)
 
-		let progress_bar = `<div class="prog" style="width: ${progress}%;" id="p${this.ref}"></div>`
-
-		emit_raw_html(progress_bar)
-
-		if (need_to_remove) {
+		if (progress >= 100) {
 			this._inv = true
-			///_hyperscript
-			console.log('remove')
-			//progress_bar += `<div _="on htmx:afterSettle 1 remove #b${this.ref}">`
-			const k = `<div _="on htmx:afterSettle 1 remove #b${this.ref}">`
-			emit_raw_html(k)
 		}
-
 	}
 }
 
-export function emit_progress(message: string): ProgressRef {
-	const p = new ProgressRef()
-	const progress_bar = `<div class="prog" style="width: 75%;" id="p${p.ref}"></div>`
-	emit_html_prepend(`<div class="box" id="b${p.ref}"><p>${message}</p>${progress_bar}</div>`)
-	return p
-}
-
-function emit_html_prepend(message: string) {
-	emit_raw_html(`<div id="log" hx-swap-oob="afterend">${message}</div>`)
+function emit_html_prepend(html: string) {
+	emit_raw_html(`<div id="log" hx-swap-oob="beforebegin">${html}</div>`)
 }
 
 // TODO: add emit_log()
+
+type LogLevel = 'log' | 'warn' | 'error'
+
+function emit_log(message: string, level: LogLevel = 'log') {
+	const log = `<div class="box" hx-swap-oob="afterend" id="log"><p class="${level}">${message}</p></div>`
+	emit_raw_html(log)
+}
