@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Document</title>
+	<script src="https://unpkg.com/htmx.org@1.9.11/dist/htmx.min.js"></script>
+	<script src="https://unpkg.com/htmx.org@1.9.11/dist/ext/ws.js"></script>
+</head>
+<body>
+	<style>
+		body {
+			background-color: #1d1e1e;
+			width: 60rem;
+			height: 100vh;
+			word-wrap: break-word;
+			margin: 0 auto;
+			display: flex;
+		}
+		@font-face {
+			font-family: 'Terminus (TTF)';
+			src: url('TerminusTTF.woff2') format('woff2');
+		}
+		html {
+			font-family: 'Terminus (TTF)';
+			font-size: 16px;
+		}
+		p {
+			margin: 1px;
+		}
+		.splitter {
+			width: 1px;
+			background-color: #2d2e2e;
+		}
+		.left {
+			flex: 1;
+			padding: 1em;
+		}
+		.right {
+			flex: 1;
+			padding: 1em;
+			overflow-y: auto;
+		}
+		.box {
+			background-color: #2d2e2e;
+			padding: 5px;
+			margin-bottom: 1em;
+		}
+		.prog {
+			height: 2px;
+			background: linear-gradient(to right, #d32f2f, #f57c00, #ffeb3b, #4caf50);
+			background-size: 400% 400%;
+			animation: progress-animation 5s ease infinite;
+		}
+		@keyframes progress-animation {
+			0% {
+				background-position: 0% 50%;
+			}
+			50% {
+				background-position: 100% 50%;
+			}
+			100% {
+				background-position: 0% 50%;
+			}
+		}
+	</style>
+
+	<div class="left">
+
+	</div>
+	<div class="splitter"></div>
+	<div class="right" hx-ext="ws" ws-connect="/api/ws">
+		<div id="log"></div>
+	</div>
+</body>
+</html>
