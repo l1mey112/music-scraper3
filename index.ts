@@ -16,12 +16,34 @@ for (const ws of sockets) {
 	ws.send(`<div class="box" id="p0">progress 150</div>`)
 } */
 
-import { busy_wait_for_users, emit_log, ProgressRef } from "./server";
+import { emit_log, PanelText, PanelRef, ProgressRef } from "./server";
 
-await busy_wait_for_users()
+let messagebox!: PanelText
+let nmessagebox!: PanelText
+
+const p = new PanelRef("panel title", c => {
+	c(nmessagebox = new PanelText())
+	c(messagebox = new PanelText())
+})
+
+const pc = new ProgressRef("progress count")
 
 
-while (true) {
+nmessagebox.text("nice to meet you")
+
+let countdown = 100
+
+while (countdown > 0) {
+	pc.emit(100 - countdown)
+	messagebox.text("hello world " + countdown)
+	await Bun.sleep(10)
+	countdown -= 1
+}
+
+pc.emit(100)
+p.close()
+
+/* while (true) {
 	const p = new ProgressRef("progress count")
 
 	let i = 0
@@ -38,4 +60,4 @@ while (true) {
 
 		await Bun.sleep(10)
 	}
-}
+} */

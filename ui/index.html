@@ -8,7 +8,7 @@
 	<script src="https://unpkg.com/htmx.org@1.9.11/dist/ext/ws.js"></script>
 	<script src="https://unpkg.com/htmx.org@1.9.11/dist/ext/remove-me.js"></script>
 </head>
-<body>
+<body hx-ext="ws, remove-me" ws-connect="/api/ws">
 	<style>
 		body {
 			background-color: #1d1e1e;
@@ -79,10 +79,12 @@
 	</style>
 
 	<div class="left">
-
+		<!-- items -->
+		<div id="panel"></div>
 	</div>
 	<div class="splitter"></div>
-	<div class="right" hx-ext="ws, remove-me" ws-connect="/api/ws">
+	<div class="right">
+		<!-- items -->
 		<div id="log"></div>
 	</div>
 </body>
