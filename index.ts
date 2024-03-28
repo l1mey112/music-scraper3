@@ -16,7 +16,7 @@ for (const ws of sockets) {
 	ws.send(`<div class="box" id="p0">progress 150</div>`)
 } */
 
-import { busy_wait_for_users, ProgressRef } from "./server";
+import { busy_wait_for_users, emit_log, ProgressRef } from "./server";
 
 await busy_wait_for_users()
 
@@ -27,6 +27,9 @@ while (true) {
 	let i = 0
 	while (true) {
 		if (i >= 100) {
+			emit_log('among')
+			emit_log('among', 'warn')
+			emit_log('among', 'error')
 			break
 		}
 

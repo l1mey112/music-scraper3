@@ -84,7 +84,12 @@ export class ProgressRef {
 		// random animation duration jittering around 1s
 		const time = 1 + Math.random() * 0.5
 
-		const remove_me = this.progress == 100 ? ` remove-me="${time}s"` : ``
+		let remove_me = ``
+		if (this.progress == 100) {
+			this._inv = true
+			remove_me = ` remove-me="${time}s"`
+		}
+
 		const progress_bar = `<div class="box"${remove_me} id="b${this.ref}"><p>${this.message}</p><div class="prog" style="width: ${this.progress}%;" id="p${this.ref}"></div></div>`
 
 		return progress_bar
@@ -114,7 +119,7 @@ function emit_html_prepend(html: string) {
 
 type LogLevel = 'log' | 'warn' | 'error'
 
-function emit_log(message: string, level: LogLevel = 'log') {
-	const log = `<div class="box" hx-swap-oob="afterend" id="log"><p class="${level}">${message}</p></div>`
-	emit_raw_html(log)
+export function emit_log(message: string, level: LogLevel = 'log') {
+	const log = `<div class="box"><p class="${level}">${message}</p></div>`
+	emit_html_prepend(log)
 }

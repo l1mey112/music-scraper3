@@ -16,6 +16,7 @@
 			height: 100vh;
 			word-wrap: break-word;
 			margin: 0 auto;
+			overflow: hidden;
 			display: flex;
 		}
 		@font-face {
@@ -29,6 +30,7 @@
 		p {
 			margin: 1px;
 			color: white;
+			font-weight: bold;
 		}
 		.splitter {
 			width: 1px;
@@ -47,6 +49,15 @@
 			background-color: #2d2e2e;
 			padding: 5px;
 			margin-bottom: 1em;
+		}
+		.log {
+			background-color: #246528;
+		}
+		.warn {
+			background-color: #ae6a11;
+		}
+		.error {
+			background-color: #941e1e;
 		}
 		.prog {
 			height: 2px;
