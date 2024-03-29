@@ -3,6 +3,7 @@ import type { ServerWebSocket } from "bun";
 // @ts-ignore - need this for autoreloads on edit
 import index from './ui/index.html'
 
+const js = Bun.file('./ui/index.js')
 const font = Bun.file('./ui/TerminusTTF.woff2')
 
 interface HTMXElement {
@@ -48,6 +49,10 @@ Bun.serve<undefined>({
 						'Content-Type': 'text/html',
 					}
 				})
+			}
+			case '/index.js': {
+				// content type known
+				return new Response(js)
 			}
 			case '/TerminusTTF.woff2': {
 				// content type known
