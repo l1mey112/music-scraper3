@@ -23,11 +23,11 @@
 			font-family: 'Terminus (TTF)';
 			src: url('TerminusTTF.woff2') format('woff2');
 		}
-		html {
+		html, pre {
 			font-family: 'Terminus (TTF)';
 			font-size: 16px;
 		}
-		p {
+		p, pre {
 			margin: 1px;
 			color: white;
 			font-weight: bold;
@@ -36,11 +36,11 @@
 			width: 1px;
 			background-color: #2d2e2e;
 		}
-		.left {
+		#left {
 			flex: 1;
 			padding: 1em;
 		}
-		.right {
+		#right {
 			flex: 1;
 			padding: 1em;
 			overflow-y: auto;
@@ -50,9 +50,7 @@
 			padding: 5px;
 			margin-bottom: 1em;
 		}
-		.log {
-			background-color: #246528;
-		}
+		/* .log {} */
 		.warn {
 			background-color: #ae6a11;
 		}
@@ -78,14 +76,21 @@
 		}
 	</style>
 
-	<div class="left">
+	<script>
+		// reset all elements inside the two panels
+		addEventListener('htmx:wsConnecting', function(event) {
+			document.querySelector('#left').innerHTML = '<div id="leftappend"></div>';
+			document.querySelector('#right').innerHTML = '<div id="rightappend"></div>';
+			console.log('wsOpen', event)
+		});
+	</script>
+
+	<div id="left">
 		<!-- items -->
-		<div id="panel"></div>
 	</div>
 	<div class="splitter"></div>
-	<div class="right">
+	<div id="right">
 		<!-- items -->
-		<div id="log"></div>
 	</div>
 </body>
 </html>

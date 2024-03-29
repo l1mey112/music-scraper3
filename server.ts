@@ -1,10 +1,30 @@
 import type { ServerWebSocket } from "bun";
 
-const index = Bun.file('ui/index.html')
-const font = Bun.file('ui/TerminusTTF.woff2')
+// @ts-ignore - need this for autoreloads on edit
+import index from './ui/index.html'
+
+const font = Bun.file('./ui/TerminusTTF.woff2')
+
+interface HTMXElement {
+	toString(): string
+}
 
 const sockets = new Set<ServerWebSocket>()
-const panels = new Set<PanelRef>()
+const elements = new Map<HTMXElement, string>() // element, pane id map ordered by insertion
+
+function emit_html(message: string, targets: Set<ServerWebSocket> = sockets) {
+	for (const ws of targets) {
+		ws.send(message)
+	}
+}
+
+function emit_element(element: HTMXElement, targets: Set<ServerWebSocket> = sockets) {
+	const pane_id = elements.get(element)
+	if (!pane_id) {
+		throw new Error("element not found in elements map")
+	}
+	emit_html(`<div id="${pane_id}" hx-swap-oob="beforebegin">${element}</div>`, targets)
+}
 
 Bun.serve<undefined>({
 	port: 8080,
@@ -22,9 +42,15 @@ Bun.serve<undefined>({
 		switch (url.pathname) {
 			case '/':
 			case '/index.html': {
-				return new Response(index)
+				// content type not known by bun
+				return new Response(index, {
+					headers: {
+						'Content-Type': 'text/html',
+					}
+				})
 			}
 			case '/TerminusTTF.woff2': {
+				// content type known
 				return new Response(font)
 			}
 			case '/api/ws': {
@@ -42,6 +68,9 @@ Bun.serve<undefined>({
 	websocket: {
 		open(ws) {
 			sockets.add(ws)
+			for (const [element, _] of elements) {
+				emit_element(element, new Set([ws]))
+			}
 		},
 		close(ws) {
 			sockets.delete(ws)
@@ -56,12 +85,6 @@ while (sockets.size === 0) {
 	await new Promise((resolve) => setTimeout(resolve, 1))
 }
 
-function emit_html(message: string) {
-	for (const ws of sockets) {
-		ws.send(message)
-	}
-}
-
 // safe invalidated identifiers
 const id_map = new WeakMap<IdRef, boolean>()
 
@@ -71,8 +94,17 @@ type IdRef = {
 }
 
 function new_id() {
-	// TODO: fix this garbage, though the rest is fine
-	const id = Math.random().toString(36).substring(2, 8)
+	// ids must not start with numbers
+	function random(length: number) {
+		let text = ""
+		const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+		for (let i = 0; i < length; i++) {
+			text += charset.charAt(Math.floor(Math.random() * charset.length))
+		}
+		return text;
+	}
+
+	const id = random(8)
 	const id_ref: IdRef = {} as IdRef
 
 	id_ref.toString = function() {
@@ -92,101 +124,78 @@ function new_id() {
 	return id_ref
 }
 
-export class PanelText {
-	private ref: IdRef
-	private message: string = ''
-
-	constructor() {
-		this.ref = new_id()
-	}
-
-	text(message: string) {
-		this.message = message
-		emit_html(`${this}`)
-	}
-
-	toString() {
-		return `<div id="p${this.ref}"><p>${this.message}</p></div>`
-	}
-}
-
-type PanelElementRef = PanelText
+// panels can be created and destroyed, with updates changing everything inside
 
 export class PanelRef {
 	private title: string
 	private id: IdRef
+	private innerhtml: string
 
-	constructor(title: string, init: (c: (_: PanelElementRef) => void) => void) {
+	constructor(title: string) {
 		this.title = title
 		this.id = new_id()
-		panels.add(this)
+		this.innerhtml = ''
 
-		let buf = ''
+		elements.set(this, 'leftappend')
+		emit_element(this)
+	}
 
-		function commit(c: PanelElementRef) {
-			buf += `${c}`
-		}
+	toString() {
+		return `<div class="box" id="${this.id}"><p>${this.title}</p><hr color=gray>${this.innerhtml}</div>`
+	}
 
-		init(commit)
-
-		const panel = `<div class="box" id="p${this.id}"><p>${this.title}</p><hr color=gray>${buf}</div>`
-		emit_html(`<div id="panel" hx-swap-oob="beforebegin">${panel}</div>`)
+	html(innerhtml: string) {
+		this.innerhtml = innerhtml
+		emit_html(`${this}`)
 	}
 
 	close() {
-		// TODO: not invalidating the id of child elements
-		//       should probably move to a simpler system wherein we don't do anything
-		//       and raise errors inside HTMX itself on not found ids
-
-		emit_html(`<div id="p${this.id}" remove-me></div>`)
+		emit_html(`<div id="${this.id}" remove-me></div>`)
 		this.id.invalidate()
-		panels.delete(this)
+		elements.delete(this)
 	}
 }
 
 export class ProgressRef {
-	private ref: IdRef
+	private id: IdRef
 	private message: string
-	private progress: number
+	progress: number
 
 	constructor(message: string) {
-		this.ref = new_id()
+		this.id = new_id()
 		this.message = message
 		this.progress = 0
 
-		emit_html(`<div id="log" hx-swap-oob="beforebegin">${this}</div>`)
+		elements.set(this, 'rightappend')
+		emit_element(this)
 	}
 
 	toString() {
-		// random animation duration jittering around 1s
-		const time = 1 + Math.random() * 0.5
-
-		let remove_me = ``
-		if (this.progress == 100) {
-			remove_me = ` remove-me="${time}s"`
-		}
-
-		const progress_bar = `<div class="box"${remove_me} id="b${this.ref}"><p>${this.message}</p><div class="prog" style="width: ${this.progress}%;" id="p${this.ref}"></div></div>`
-
-		return progress_bar
+		return `<div class="box" id="${this.id}"><p>${this.message}</p><div class="prog" style="width: ${this.progress}%;"></div></div>`
 	}
 
 	emit(progress: number) {
 		this.progress = Math.min(Math.max(progress, 0), 100) // clamp
-
 		emit_html(`${this}`)
+	}
 
-		if (progress == 100) {
-			this.ref.invalidate()
-		}
+	close() {
+		// much better instead of closing on 100%, less error prone
+		emit_html(`<div id="${this.id}" remove-me></div>`)
+		this.id.invalidate()
+		elements.delete(this)
 	}
 }
-
-// TODO: add emit_log()
 
 type LogLevel = 'log' | 'warn' | 'error'
 
 export function emit_log(message: string, level: LogLevel = 'log') {
-	const log = `<div class="box"><p class="${level}">${message}</p></div>`
-	emit_html(`<div id="log" hx-swap-oob="beforebegin">${log}</div>`)
+	const elm = {
+		toString() {
+			return `<div class="box ${level}"><pre>${message}</pre></div>`
+		}
+	}
+
+	elements.set(elm, 'rightappend')
+	emit_element(elm)
 }
