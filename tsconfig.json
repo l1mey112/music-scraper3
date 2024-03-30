@@ -6,12 +6,14 @@
     "module": "ESNext",
     "moduleDetection": "force",
     "jsx": "react-jsx",
+    "jsxImportSource": "@kitajs/html", /* KITA */
+    "plugins": [{ "name": "@kitajs/ts-html-plugin" }], /* KITA */
     "allowJs": true,
 
     // Bundler mode
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
+    "verbatimModuleSyntax": false, /* FALSE NOW */
     "noEmit": true,
 
     // Best practices

@@ -72,19 +72,32 @@
 				background-position: 0% 50%;
 			}
 		}
+		table {
+			color: white;
+			border: 1px solid white;
+			border-collapse: collapse;
+		}
+		th, td {
+			padding: 5px;
+			border: 1px solid white;
+		}
+		button, input[type="submit"], input {
+			color: white;
+			border: 1px solid white;
+		}
 	</style>
 
 	<script>
 		// reset all elements inside the two panels
 		addEventListener('htmx:wsConnecting', function(event) {
-			document.querySelector('#left').innerHTML = '<div id="leftappend"></div>';
 			document.querySelector('#right').innerHTML = '<div id="rightappend"></div>';
 			console.log('wsOpen', event)
 		});
 	</script>
 
 	<div id="left">
-		<!-- items -->
+		<hr>
+		<div id="cred" hx-get="/ui/cred" hx-trigger="load"></div>
 	</div>
 	<div class="splitter"></div>
 	<div id="right">

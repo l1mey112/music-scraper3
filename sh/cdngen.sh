@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -e
+
 urls=(
 	"https://unpkg.com/htmx.org@1.9.11/dist/htmx.min.js"
 	"https://unpkg.com/htmx.org@1.9.11/dist/ext/ws.js"

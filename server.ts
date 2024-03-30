@@ -1,10 +1,10 @@
-import type { ServerWebSocket } from "bun";
+import { ServerWebSocket } from "bun";
 
 // @ts-ignore - need this for autoreloads on edit
-import index from './ui/index.html'
+import index from './ui-static/index.html'
 
-const js = Bun.file('./ui/index.js')
-const font = Bun.file('./ui/TerminusTTF.woff2')
+const js = Bun.file('./ui-static/index.js')
+const font = Bun.file('./ui-static/TerminusTTF.woff2')
 
 interface HTMXElement {
 	toString(): string
@@ -27,6 +27,19 @@ function emit_element(element: HTMXElement, targets: Set<ServerWebSocket> = sock
 	emit_html(`<div id="${pane_id}" hx-swap-oob="beforebegin">${element}</div>`, targets)
 }
 
+type ComponentFn = (req: Request) => string | Promise<string>
+const component_map = new Map<string, ComponentFn>()
+
+type HTTPMethod = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'CONNECT' | 'OPTIONS' | 'TRACE' | 'PATCH'
+
+export function register_htmx_component(method: HTTPMethod, route: string, f: ComponentFn) {
+	const str = `${method}:/ui/${route}`
+	if (component_map.has(str)) {
+		throw new Error(`route ${str} already registered`)
+	}
+	component_map.set(str, f)
+}
+
 Bun.serve<undefined>({
 	port: 8080,
 	error(e) {
@@ -36,8 +49,13 @@ Bun.serve<undefined>({
 	async fetch(req, server) {
 		const url = new URL(req.url)
 
-		if (req.method !== 'GET') {
-			return new Response("405 Method Not Allowed", { status: 405 })
+		const component = component_map.get(`${req.method}:${url.pathname}`)
+		if (component) {
+			return new Response(await component(req), {
+				headers: {
+					'Content-Type': 'text/html',
+				}
+			})
 		}
 
 		switch (url.pathname) {
@@ -66,6 +84,7 @@ Bun.serve<undefined>({
 				return new Response("400 Bad Request", { status: 400 })
 			}
 			default: {
+				console.log(`404 Not Found: ${url.pathname}`)
 				return new Response("404 Not Found", { status: 404 })
 			}
 		}
@@ -127,38 +146,6 @@ function new_id() {
 
 	id_map.set(id_ref, true)
 	return id_ref
-}
-
-// panels can be created and destroyed, with updates changing everything inside
-
-export class PanelRef {
-	private title: string
-	private id: IdRef
-	private innerhtml: string
-
-	constructor(title: string) {
-		this.title = title
-		this.id = new_id()
-		this.innerhtml = ''
-
-		elements.set(this, 'leftappend')
-		emit_element(this)
-	}
-
-	toString() {
-		return `<div class="box" id="${this.id}"><p>${this.title}</p><hr color=gray>${this.innerhtml}</div>`
-	}
-
-	html(innerhtml: string) {
-		this.innerhtml = innerhtml
-		emit_html(`${this}`)
-	}
-
-	close() {
-		emit_html(`<div id="${this.id}" remove-me></div>`)
-		this.id.invalidate()
-		elements.delete(this)
-	}
 }
 
 export class ProgressRef {
