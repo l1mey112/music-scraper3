@@ -48,7 +48,7 @@ async function cred_add(req: Request) {
 			.filter(k => k.startsWith('v'))
 			.map(k => data.get(k))
 			.filter(v => v !== null) as string[]
-		
+
 		// sort values by key v0, v1, v2, ...
 		values.sort((a, b) => {
 			const a_index = parseInt(a.slice(1))
@@ -67,9 +67,9 @@ async function cred_add(req: Request) {
 		switch (kind) {
 			case 'spotify': {
 				if (values.length !== 2) {
-					emit_log('cred_add spotify invalid', 'error')
-					return cred_refresh()
+					throw null
 				}
+				
 				store.spotify.push(values as [string, string])
 				break
 			}
@@ -117,23 +117,15 @@ function cred_censor(value: string) {
 	return value.slice(0, 3) + '***'
 }
 
-function cred_table(kind: CredentialKind, title: string, names: string[], values: string[][]) {
-	if (values[0] && names.length !== values[0].length) {
-		console.log(values)
-		console.log(names)
-		throw new Error('cred_table: names and values length mismatch')
-	}
-
+function cred_table(kind: CredentialKind, title: string, names: string[], values: string[][], tooltip?: string) {
 	return (
-		<div>
+		<details>
+			<summary>{title} {tooltip && <span class="tooltip" data-tooltip title={tooltip}> [?]</span>}<hr /></summary>
 			{/* for some reason, HTMX always forces multipart/form-data */}
 			<form hx-post={`/ui/cred_add`} hx-trigger="submit">
 			<input type="hidden" name="kind" value={kind}></input>
 			<table>
 				<thead>
-					<tr>
-						<th colspan={3}>{title}</th>
-					</tr>
 					<tr>
 						{...names.map(name => <th>{name}</th>)}
 					</tr>
@@ -147,14 +139,14 @@ function cred_table(kind: CredentialKind, title: string, names: string[], values
 							</td>
 						</tr>
 					))}
-						{...names.map((_, index) => <td><input name={`v${index}`} type="password"/></td>)}
-						<td>
-							<input type="submit" value="+"></input>
-						</td>
+					{...names.map((_, index) => <td><input name={`v${index}`} type="password"/></td>)}
+					<td>
+						<input type="submit" value="+"></input>
+					</td>
 				</tbody>
 			</table>
 			</form>
-		</div>
+		</details>
 	)
 }
 
@@ -164,7 +156,11 @@ function cred_get() {
 	// use ...array to ignore key warnings
 
 	const tables = [
-		cred_table('spotify', 'Spotify API Credentials', ['Client ID', 'Client Secret'], store.spotify)
+		cred_table(
+			'spotify', 'Spotify API Credentials',
+			['Client ID', 'Client Secret'], store.spotify,
+			'assumes a default redirect URI of http://localhost:8080/callback'
+		)
 	]
 
 	return (

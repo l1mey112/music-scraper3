@@ -104,10 +104,6 @@ Bun.serve<undefined>({
 })
 
 console.log('server: listening on http://localhost:8080')
-console.log('server: busy waiting for users to connect...')
-while (sockets.size === 0) {
-	await new Promise((resolve) => setTimeout(resolve, 1))
-}
 
 // safe invalidated identifiers
 const id_map = new WeakMap<IdRef, boolean>()

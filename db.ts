@@ -11,15 +11,15 @@ sqlite.exec("pragma synchronous = normal;") // safe with WAL
 
 export const db: BunSQLiteDatabase<typeof schema> = drizzle(sqlite, { schema })
 
-process.on("beforeExit", (code) => {
-	try {
-		sqlite.exec("pragma wal_checkpoint(TRUNCATE);") // checkpoint WAL
-		sqlite.exec("pragma journal_mode = DELETE;") // delete wal
-		sqlite.exec("pragma vacuum;") // vacuum
-		sqlite.exec("pragma optimize;") // optimize
-		sqlite.exec("pragma analysis_limit=1000;") // 1000 iterations
-		sqlite.close() // close the db
-	} catch {
-		//
-	}
-})
+function db_close() {
+	console.log('db: beforeExit')
+	sqlite.exec("pragma wal_checkpoint(TRUNCATE);") // checkpoint WAL
+	sqlite.exec("pragma journal_mode = DELETE;") // delete wal
+	sqlite.exec("pragma vacuum;") // vacuum
+	sqlite.exec("pragma optimize;") // optimize
+	sqlite.exec("pragma analysis_limit=1000;") // 1000 iterations
+	sqlite.close() // close the db
+	console.log('db: closed')
+}
+
+process.on("beforeExit", db_close)
