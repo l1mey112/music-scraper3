@@ -44,7 +44,10 @@ async function component_append(element: RenderFn, targets: Set<ServerWebSocket>
 	if (typeof element === 'function') {
 		element = await element(true)
 	}
-	emit_html(`<div id="${pane_id}" hx-swap-oob="afterbegin">${element}</div>`, targets)
+
+	const oob = pane_id == 'left' ? 'beforeend' : 'afterbegin'
+	
+	emit_html(`<div id="${pane_id}" hx-swap-oob="${oob}">${element}</div>`, targets)
 }
 
 export async function component_invalidate(element: RenderFn, targets: Set<ServerWebSocket> = sockets) {

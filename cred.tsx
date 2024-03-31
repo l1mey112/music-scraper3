@@ -6,20 +6,23 @@ import { sql } from 'drizzle-orm'
 export type CredentialKind = keyof CredentialStore
 type CredentialStore = {
 	'spotify': [string, string][] // [client_id, client_secret]
+	'deezer_arl': [string][]
 }
 
 function cred_db_get(): CredentialStore {
 	let store: CredentialStore = {
 		'spotify': [],
+		'deezer_arl': [],
 	}
-	
+
 	const cred = db.select({ data: schema.thirdparty_store.data })
 		.from(schema.thirdparty_store)
 		.where(sql`kind = 'cred'`)
 		.get() as { data: CredentialStore } | undefined
-
+	
+	// fill in the blanks
 	if (cred) {
-		store = cred.data
+		store = { ...store, ...cred.data }
 	}
 
 	return store
@@ -65,8 +68,16 @@ async function cred_add(req: Request) {
 				if (values.length !== 2) {
 					throw null
 				}
-				
+
 				store.spotify.push(values as [string, string])
+				break
+			}
+			case 'deezer_arl': {
+				if (values.length !== 1) {
+					throw null
+				}
+
+				store.deezer_arl.push(values as [string])
 				break
 			}
 			default: {
@@ -76,11 +87,13 @@ async function cred_add(req: Request) {
 
 		cred_db_set(store)
 		emit_log(`[cred_add] add to <i>${kind}</i> success`)
+
+		invalidate_kind(kind) // rerender
 	} catch (e) {
+		console.error(e)
 		emit_log('[cred_add] failed', 'error')
 	}
 
-	component_invalidate(cred_tostring) // rerender
 }
 
 function cred_delete(req: Request) {
@@ -99,11 +112,10 @@ function cred_delete(req: Request) {
 			cred_db_set(store)
 			emit_log(`[cred_delete] delete from <i>${kind}</i> success`)
 		}
+		invalidate_kind(kind as CredentialKind) // rerender
 	} catch (e) {
 		emit_log('[cred_delete] failed', 'error')
 	}
-
-	component_invalidate(cred_tostring) // rerender
 }
 
 function cred_censor(value: string) {
@@ -113,24 +125,30 @@ function cred_censor(value: string) {
 	return value.slice(0, 3) + '***'
 }
 
-function cred_table(full_render: boolean, kind: CredentialKind, title: string, names: string[], values: string[][], tooltip?: string) {
+type TableProps = {
+	kind: CredentialKind
+	title: string
+	names: string[]
+	tooltip?: string
+}
+
+function cred_table(full_render: boolean, values: string[][], props: TableProps) {
 	let table = (
-		<table id={`cred-table-${kind}`}>
+		<table id={`cred-table-${props.kind}`}>
 			<thead>
 				<tr>
-					{...names.map(name => <th>{name}</th>)}
+					{...props.names.map(name => <th>{name}</th>)}
 				</tr>
 			</thead>
 			<tbody>
-				{...values.map(value => (
-					<tr>
+				{...values.map(value => <tr>
 						{value.map(v => <td>{cred_censor(v)}</td>)}
 						<td>
-							<button hx-swap="none" hx-post={`/ui/cred_delete?kind=${kind}&value=${value.join(',')}`} hx-trigger="click">x</button>
+							<button hx-swap="none" hx-post={`/ui/cred_delete?kind=${props.kind}&value=${value.join(',')}`} hx-trigger="click">x</button>
 						</td>
 					</tr>
-				))}
-				{...names.map((_, index) => <td><input name={`v${index}`} type="password"/></td>)}
+				)}
+				{...props.names.map((_, index) => <td><input name={`v${index}`} type="password"/></td>)}
 				<td>
 					<input type="submit" value="+"></input>
 				</td>
@@ -140,10 +158,10 @@ function cred_table(full_render: boolean, kind: CredentialKind, title: string, n
 
 	if (full_render) {
 		table = <details>
-			<summary>{title} {tooltip && <span class="tooltip" data-tooltip title={tooltip}> [?]</span>}<hr /></summary>
+			<summary>{props.title} {props.tooltip && <span class="tooltip" data-tooltip title={props.tooltip}> [?]</span>}<hr /></summary>
 			{/* for some reason, HTMX always forces multipart/form-data */}
 			<form hx-swap="none" hx-post={`/ui/cred_add`} hx-trigger="submit">
-			<input type="hidden" name="kind" value={kind}></input>
+			<input type="hidden" name="kind" value={props.kind}></input>
 			{table}
 			</form>
 		</details>
@@ -152,26 +170,35 @@ function cred_table(full_render: boolean, kind: CredentialKind, title: string, n
 	return table
 }
 
-function cred_tostring(init: boolean) {
-	const store = cred_db_get()
+const props: TableProps[] = [
+	{
+		kind: 'spotify',
+		title: 'Spotify API Credentials',
+		names: ['Client ID', 'Client Secret'],
+		tooltip: 'assumes a default redirect URI of http://localhost:8080/callback',
+	},
+	{
+		kind: 'deezer_arl',
+		title: 'Deezer ARL Token',
+		names: ['ARL Token'],
+	},
+]
 
-	// use ...array to ignore key warnings
+const cred_map = new Map(props.map(prop => [prop.kind, (init: boolean) => cred_table(init, cred_db_get()[prop.kind], prop)]))
 
-	const tables = [
-		cred_table(init,
-			'spotify', 'Spotify API Credentials',
-			['Client ID', 'Client Secret'], store.spotify,
-			'assumes a default redirect URI of http://localhost:8080/callback'
-		)
-	]
-
-	return (
-		<>{...tables}</>
-	);
+for (const [_, fn] of cred_map) {
+	component_register(fn, 'left')
 }
 
-// call `component_invalidate(cred_tostring)` to rerender
-component_register(cred_tostring, 'left')
+function invalidate_kind(kind: CredentialKind) {
+	const fn = cred_map.get(kind)
+	if (!fn) {
+		emit_log(`[invalidate_kind] ${kind} not found`, 'error')
+		return
+	}
+	component_invalidate(fn)
+}
+
 register_route('POST', 'cred_delete', cred_delete)
 register_route('POST', 'cred_add', cred_add)
 
@@ -179,43 +206,4 @@ register_route('POST', 'cred_add', cred_add)
 	| 'spotify'
 	| 'spotify_user'
 	| 'qobuz_user'
-	| 'deezer_user'
-
-type CredentialStore = {
-	'spotify': [string, string][] // [client_id, client_secret]
-}
- */
-/* const store: CredentialStore = {
-	'spotify': [],
-} */
-
-/* function db_load() {
-	let store = {} as CredentialStore
-
-	const cred = db.select()
-		.from(schema.thirdparty_store)
-		.where(sql`kind = 'cred'`)
-		.get()
-
-	// if (cred) {}
-
-	for (const row of rows) {
-		const [kind, data] = row.data
-		if (kind === 'spotify') {
-			store.spotify.push(data)
-		}
-	}
-} */
-
-// return cached crediential, on failure return undefined and log
-// log error if crediential requires user interaction
-/* export async function crediential(cred: Credential): Promise<string | undefined> {
-	emit_log(`crediential <i>${cred}</i> unhandled`, 'error')
-	return undefined
-} */
-
-/* const spotify = new PanelRef("credentials: spotify")
-
-spotify.html(
-	`<pre>` + `</pre>`
-) */
+	| 'deezer_user' */
