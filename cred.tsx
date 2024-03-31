@@ -3,7 +3,7 @@ import { db } from "./db"
 import { emit_log, register_htmx_component as register_route } from "./server"
 import { sql } from 'drizzle-orm'
 
-type CredentialKind = keyof CredentialStore
+export type CredentialKind = keyof CredentialStore
 type CredentialStore = {
 	'spotify': [string, string][] // [client_id, client_secret]
 }
