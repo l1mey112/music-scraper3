@@ -37,8 +37,12 @@ const passes: PassBlock[] = [
 	{ name: 'track.meta.weak', fn: () => false },
 ]
 
-function pass_table() {
-	
+function pass_update() {
+	return (
+		<table>
+			
+		</table>
+	)
 }
 
 let pass_state: PassState
@@ -53,7 +57,7 @@ function pass_reset() {
 	}
 }
 
-async function pass_run_iteration() {
+async function pass_run() {
 	pass_state.state = PassStateEnum.Running
 
 	if (pass_state.idx == 0) {

@@ -1,6 +1,6 @@
 import * as schema from './schema'
 import { db } from "./db"
-import { emit_log, register_htmx_component as register_route } from "./server"
+import { component_invalidate, component_register, emit_log, register_route } from "./server"
 import { sql } from 'drizzle-orm'
 
 export type CredentialKind = keyof CredentialStore
@@ -17,7 +17,7 @@ function cred_db_get(): CredentialStore {
 		.from(schema.thirdparty_store)
 		.where(sql`kind = 'cred'`)
 		.get() as { data: CredentialStore } | undefined
-	
+
 	if (cred) {
 		store = cred.data
 	}
@@ -26,17 +26,13 @@ function cred_db_get(): CredentialStore {
 }
 
 function cred_db_set(store: CredentialStore) {
-	db.update(schema.thirdparty_store)
-		.set({ kind: 'cred', data: store })
+	db.insert(schema.thirdparty_store)
+		.values({ kind: 'cred', data: store })
+		.onConflictDoUpdate({
+			target: schema.thirdparty_store.kind,
+			set: { data: store }
+		})
 		.run()
-}
-
-// refresh entire crediential panel
-// bit wasteful, but who cares?
-function cred_refresh() {
-	return (
-		<div id="cred" hx-swap-oob="true" hx-get="/ui/cred" hx-trigger="load"></div>
-	)
 }
 
 async function cred_add(req: Request) {
@@ -81,10 +77,10 @@ async function cred_add(req: Request) {
 		cred_db_set(store)
 		emit_log(`[cred_add] add to <i>${kind}</i> success`)
 	} catch (e) {
-		emit_log('cred_add failed', 'error')
+		emit_log('[cred_add] failed', 'error')
 	}
 
-	return cred_refresh()
+	component_invalidate(cred_tostring) // rerender
 }
 
 function cred_delete(req: Request) {
@@ -104,10 +100,10 @@ function cred_delete(req: Request) {
 			emit_log(`[cred_delete] delete from <i>${kind}</i> success`)
 		}
 	} catch (e) {
-		emit_log('cred_delete failed', 'error')
+		emit_log('[cred_delete] failed', 'error')
 	}
 
-	return cred_refresh()
+	component_invalidate(cred_tostring) // rerender
 }
 
 function cred_censor(value: string) {
@@ -117,46 +113,52 @@ function cred_censor(value: string) {
 	return value.slice(0, 3) + '***'
 }
 
-function cred_table(kind: CredentialKind, title: string, names: string[], values: string[][], tooltip?: string) {
-	return (
-		<details>
+function cred_table(full_render: boolean, kind: CredentialKind, title: string, names: string[], values: string[][], tooltip?: string) {
+	let table = (
+		<table id={`cred-table-${kind}`}>
+			<thead>
+				<tr>
+					{...names.map(name => <th>{name}</th>)}
+				</tr>
+			</thead>
+			<tbody>
+				{...values.map(value => (
+					<tr>
+						{value.map(v => <td>{cred_censor(v)}</td>)}
+						<td>
+							<button hx-swap="none" hx-post={`/ui/cred_delete?kind=${kind}&value=${value.join(',')}`} hx-trigger="click">x</button>
+						</td>
+					</tr>
+				))}
+				{...names.map((_, index) => <td><input name={`v${index}`} type="password"/></td>)}
+				<td>
+					<input type="submit" value="+"></input>
+				</td>
+			</tbody>
+		</table>
+	)
+
+	if (full_render) {
+		table = <details>
 			<summary>{title} {tooltip && <span class="tooltip" data-tooltip title={tooltip}> [?]</span>}<hr /></summary>
 			{/* for some reason, HTMX always forces multipart/form-data */}
-			<form hx-post={`/ui/cred_add`} hx-trigger="submit">
+			<form hx-swap="none" hx-post={`/ui/cred_add`} hx-trigger="submit">
 			<input type="hidden" name="kind" value={kind}></input>
-			<table>
-				<thead>
-					<tr>
-						{...names.map(name => <th>{name}</th>)}
-					</tr>
-				</thead>
-				<tbody>
-					{...values.map(value => (
-						<tr>
-							{value.map(v => <td>{cred_censor(v)}</td>)}
-							<td>
-								<button hx-post={`/ui/cred_delete?kind=${kind}&value=${value.join(',')}`} hx-trigger="click">x</button>
-							</td>
-						</tr>
-					))}
-					{...names.map((_, index) => <td><input name={`v${index}`} type="password"/></td>)}
-					<td>
-						<input type="submit" value="+"></input>
-					</td>
-				</tbody>
-			</table>
+			{table}
 			</form>
 		</details>
-	)
+	}
+
+	return table
 }
 
-function cred_get() {
+function cred_tostring(init: boolean) {
 	const store = cred_db_get()
 
 	// use ...array to ignore key warnings
 
 	const tables = [
-		cred_table(
+		cred_table(init,
 			'spotify', 'Spotify API Credentials',
 			['Client ID', 'Client Secret'], store.spotify,
 			'assumes a default redirect URI of http://localhost:8080/callback'
@@ -164,11 +166,12 @@ function cred_get() {
 	]
 
 	return (
-		<div>{...tables}</div>
+		<>{...tables}</>
 	);
 }
 
-register_route('GET', 'cred', cred_get)
+// call `component_invalidate(cred_tostring)` to rerender
+component_register(cred_tostring, 'left')
 register_route('POST', 'cred_delete', cred_delete)
 register_route('POST', 'cred_add', cred_add)
 

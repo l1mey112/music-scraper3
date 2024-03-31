@@ -6,12 +6,21 @@ import index from './ui-static/index.html'
 const js = Bun.file('./ui-static/index.js')
 const font = Bun.file('./ui-static/TerminusTTF.woff2')
 
-interface HTMXElement {
+/* interface RenderFn {
+	toString(): string
+} */
+
+type MaybePromise<T> = T | Promise<T>
+
+interface ToString {
 	toString(): string
 }
 
+type ContainerOOBId = 'left' | 'right'
+type RenderFn = ToString | ((init: boolean) => MaybePromise<ToString>)
+
 const sockets = new Set<ServerWebSocket>()
-const elements = new Map<HTMXElement, string>() // element, pane id map ordered by insertion
+const components = new Map<RenderFn, ContainerOOBId>() // element, pane id map ordered by insertion
 
 function emit_html(message: string, targets: Set<ServerWebSocket> = sockets) {
 	for (const ws of targets) {
@@ -19,25 +28,47 @@ function emit_html(message: string, targets: Set<ServerWebSocket> = sockets) {
 	}
 }
 
-function emit_element(element: HTMXElement, targets: Set<ServerWebSocket> = sockets) {
-	const pane_id = elements.get(element)
+export function component_register(element: RenderFn, oob: ContainerOOBId) {
+	if (components.has(element)) {
+		throw new Error(`component ${element} already registered`)
+	}
+	components.set(element, oob)
+}
+
+// only async if RenderFn is async, otherwise don't bother
+async function component_append(element: RenderFn, targets: Set<ServerWebSocket> = sockets) {
+	const pane_id = components.get(element)
 	if (!pane_id) {
 		throw new Error("element not found in elements map")
 	}
-	emit_html(`<div id="${pane_id}" hx-swap-oob="beforebegin">${element}</div>`, targets)
+	if (typeof element === 'function') {
+		element = await element(true)
+	}
+	emit_html(`<div id="${pane_id}" hx-swap-oob="afterbegin">${element}</div>`, targets)
 }
 
-type ComponentFn = (req: Request) => string | Promise<string>
-const component_map = new Map<string, ComponentFn>()
+export async function component_invalidate(element: RenderFn, targets: Set<ServerWebSocket> = sockets) {
+	// we can get away without checking this honestly
+	if (!components.get(element)) {
+		throw new Error("element not found in elements map")
+	}
+	if (typeof element === 'function') {
+		element = await element(false)
+	}
+	emit_html(`${element}`, targets)
+}
+
+type RouteFn = (req: Request) => MaybePromise<string | void>
+const route_map = new Map<string, RouteFn>()
 
 type HTTPMethod = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'CONNECT' | 'OPTIONS' | 'TRACE' | 'PATCH'
 
-export function register_htmx_component(method: HTTPMethod, route: string, f: ComponentFn) {
+export function register_route(method: HTTPMethod, route: string, f: RouteFn) {
 	const str = `${method}:/ui/${route}`
-	if (component_map.has(str)) {
+	if (route_map.has(str)) {
 		throw new Error(`route ${str} already registered`)
 	}
-	component_map.set(str, f)
+	route_map.set(str, f)
 }
 
 Bun.serve<undefined>({
@@ -49,9 +80,11 @@ Bun.serve<undefined>({
 	async fetch(req, server) {
 		const url = new URL(req.url)
 
-		const component = component_map.get(`${req.method}:${url.pathname}`)
-		if (component) {
-			return new Response(await component(req), {
+		const route = route_map.get(`${req.method}:${url.pathname}`)
+		if (route) {
+			// void can mean any value, just that it isn't observable
+			// who cares? if my function returns `void` im just going to treat it as `undefined`
+			return new Response(await route(req) as string | undefined, {
 				headers: {
 					'Content-Type': 'text/html',
 				}
@@ -90,10 +123,10 @@ Bun.serve<undefined>({
 		}
 	},
 	websocket: {
-		open(ws) {
+		async open(ws) {
 			sockets.add(ws)
-			for (const [element, _] of elements) {
-				emit_element(element, new Set([ws]))
+			for (const [element, _] of components) {
+				await component_append(element, new Set([ws]))
 			}
 		},
 		close(ws) {
@@ -154,8 +187,8 @@ export class ProgressRef {
 		this.message = message
 		this.progress = 0
 
-		elements.set(this, 'rightappend')
-		emit_element(this)
+		components.set(this, 'right')
+		component_append(this)
 	}
 
 	toString() {
@@ -171,7 +204,7 @@ export class ProgressRef {
 		// much better instead of closing on 100%, less error prone
 		emit_html(`<div id="${this.id}" remove-me></div>`)
 		this.id.invalidate()
-		elements.delete(this)
+		components.delete(this)
 	}
 }
 
@@ -184,6 +217,6 @@ export function emit_log(message: string, level: LogLevel = 'log') {
 		}
 	}
 
-	elements.set(elm, 'rightappend')
-	emit_element(elm)
+	components.set(elm, 'right')
+	component_append(elm)
 }

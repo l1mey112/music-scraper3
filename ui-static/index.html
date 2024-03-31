@@ -25,7 +25,7 @@
 			font-family: 'Terminus (TTF)';
 			font-size: 16px;
 		}
-		p, pre {
+		p, pre, summary {
 			margin: 1px;
 			color: white;
 			font-weight: bold;
@@ -86,6 +86,7 @@
 			border: 1px solid white;
 		}
 		button, input[type="submit"], input {
+			background-color: #1d1e1e;
 			color: white;
 			border: 1px solid white;
 		}
@@ -94,18 +95,13 @@
 	<script>
 		// reset all elements inside the two panels
 		addEventListener('htmx:wsConnecting', function(event) {
-			document.querySelector('#right').innerHTML = '<div id="rightappend"></div>';
-			console.log('wsOpen', event)
+			document.querySelector('#left').innerHTML = '';
+			document.querySelector('#right').innerHTML = '';
 		});
 	</script>
 
-	<div id="left">
-		<hr>
-		<div id="cred" hx-get="/ui/cred" hx-trigger="load"></div>
-	</div>
+	<div id="left"></div>
 	<div class="splitter"></div>
-	<div id="right">
-		<!-- items -->
-	</div>
+	<div id="right"></div>
 </body>
 </html>
