@@ -190,7 +190,7 @@ export class ProgressRef {
 	}
 
 	toString() {
-		return `<div class="box" id="${this.id}"><p>${this.message}</p><div class="prog" style="width: ${this.progress}%;"></div></div>`
+		return `<div class="box" id="${this.id}"><pre>${this.message}</pre><div class="prog" style="width: ${this.progress}%;"></div></div>`
 	}
 
 	emit(progress: number) {

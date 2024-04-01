@@ -2,12 +2,15 @@ import { CredentialKind } from "./cred"
 import { component_invalidate, component_register, emit_log, route_register } from "./server"
 import { MaybePromise } from "./types"
 
+const trip_count_max = 10
+
 type PassState = {
 	state: PassStateEnum
 	idx: number
 	single_step: boolean
 	breakpoints: Set<number>
-	changed: boolean
+	mutations: Set<number>
+	trip_count: number
 }
 
 // state machine
@@ -37,7 +40,6 @@ type PassBlock = {
 }
 
 function pass_stop() {
-	emit_log('pass_stop')
 	if (pass_state.state == PassStateEnum.Running) {
 		pass_state.state = PassStateEnum.PendingStop		
 	}
@@ -52,16 +54,15 @@ async function pass_job() {
 	// typescript narrowing has no idea about other functions and their side effects
 	pass_state.state = PassStateEnum.Running as PassStateEnum
 
-	if (pass_state.idx == 0) {
-		pass_state.changed = false
-	}
-
 	exit: do {
+		if (pass_state.idx == 0) {
+			pass_state.mutations.clear()
+		}
 		while (pass_state.idx < passes.length) {
 			component_invalidate(pass_tostring)
 			const pass = passes[pass_state.idx]
 			if (await pass.fn()) {
-				pass_state.changed = true
+				pass_state.mutations.add(pass_state.idx)
 			}
 			pass_state.idx++
 
@@ -75,9 +76,22 @@ async function pass_job() {
 			}
 		}
 		pass_state.idx = 0
-	} while (pass_state.changed)
+		pass_state.trip_count++
+		if (pass_state.trip_count >= trip_count_max) {
+			emit_log(`[pass_job] forward progress trip count exceeded max of <i>${trip_count_max}</i>`, 'error')
+			pass_state.state = PassStateEnum.Stopped
+			pass_state.trip_count = 0
+			break exit
+		}
+	} while (pass_state.mutations.size > 0)
 
-	if (!pass_state.changed) {
+	// single stepping over the last pass
+	if (pass_state.idx >= passes.length) {
+		pass_state.idx = 0
+	}
+
+	if (pass_state.mutations.size == 0) {
+		pass_state.trip_count = 0
 		pass_state.state = PassStateEnum.Stopped
 	}
 	component_invalidate(pass_tostring)
@@ -98,13 +112,13 @@ function pass_run() {
 }
 
 const passes: PassBlock[] = [
-	{ name: 'track.meta.weak0', fn: async () => await Bun.sleep(100) },
-	{ name: 'track.meta.weak1', fn: async () => await Bun.sleep(100) },
-	{ name: 'track.meta.weak2', fn: async () => await Bun.sleep(100) },
-	{ name: 'track.meta.weak3', fn: async () => await Bun.sleep(100) },
-	{ name: 'track.meta.weak4', fn: async () => await Bun.sleep(100) },
-	{ name: 'track.meta.weak5', fn: async () => await Bun.sleep(100) },
-	{ name: 'track.meta.weak6', fn: async () => await Bun.sleep(100) },
+	{ name: 'track.meta.weak0', fn: async () => { emit_log('track.meta.weak0'); await Bun.sleep(100) } },
+	{ name: 'track.meta.weak1', fn: async () => { emit_log('track.meta.weak1'); await Bun.sleep(100) } },
+	{ name: 'track.meta.weak2', fn: async () => { emit_log('track.meta.weak2'); await Bun.sleep(100) } },
+	{ name: 'track.meta.weak3', fn: async () => { emit_log('track.meta.weak3'); await Bun.sleep(100) } },
+	{ name: 'track.meta.weak4', fn: async () => { emit_log('track.meta.weak4'); await Bun.sleep(100) } },
+	{ name: 'track.meta.weak5', fn: async () => { emit_log('track.meta.weak5'); await Bun.sleep(100) } },
+	{ name: 'track.meta.weak6', fn: async () => { emit_log('track.meta.weak6'); await Bun.sleep(100) } },
 ]
 
 function pass_tostring() {
@@ -112,8 +126,8 @@ function pass_tostring() {
 		<table id="pass-table">
 			<thead>
 				<tr>
-					<td></td>
-					<td class="tooltip">Pass</td>
+					<td style="text-align: end;">{pass_state.trip_count}</td>
+					<td>Pass</td>
 				</tr>
 			</thead>
 			<tbody>
@@ -128,15 +142,20 @@ function pass_tostring() {
 							case PassStateEnum.Stopped: pass_class = 'table-stopped'; break
 						}
 					}
+					let pass_mut_class = ''
+					if (pass_state.mutations.has(idx)) {
+						pass_mut_class = 'table-running'
+					}
 
 					// TODO: impl active
 					return (
-						<tr class={pass_class}>
-							<td>
+						<tr>
+							<td class={pass_class}>
 								<input checked={pass_state.breakpoints.has(idx)} hx-trigger="click" hx-vals={`{"idx":${idx}}`} hx-swap="none" hx-post={`/ui/pass_toggle_bp`} type="checkbox" name="state" id={id} />
 								<label for={id} />
 							</td>
-							<td>{pass.name}</td>
+							<td class={pass_class}>{pass.name}</td>
+							<td class={pass_mut_class}>()</td>
 						</tr>
 					)
 				})}
@@ -147,7 +166,7 @@ function pass_tostring() {
 						<input checked={pass_state.single_step} hx-trigger="click" hx-swap="none" hx-post={`/ui/pass_toggle_st`} type="checkbox" name="state" id="pass-table-st" />
 						<label class="tooltip" data-tooltip title="single step execution" for="pass-table-st" />
 					</td>
-					<td>
+					<td colspan={2}>
 						<button hx-post="/ui/pass_run" hx-swap="none" hx-trigger="click">Run</button>
 						<button hx-post="/ui/pass_stop" hx-swap="none" hx-trigger="click">Stop</button>
 					</td>
@@ -186,6 +205,7 @@ let pass_state: PassState = {
 	idx: 0,
 	breakpoints: new Set(),
 	single_step: false,
-	changed: false,
+	mutations: new Set(),
 	state: PassStateEnum.Stopped,
+	trip_count: 0,
 }
