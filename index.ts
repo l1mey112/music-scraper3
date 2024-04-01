@@ -2,6 +2,7 @@ import './server' // sideeffect
 import './cred' // sideeffect
 import './pass' // sideeffect
 import { db_close } from './db'
+import { meta_youtube_channel } from './passes/youtube'
 
 function exit() {
 	db_close()
@@ -14,3 +15,10 @@ function exit() {
 //       bun doesn't catch these signals
 process.on("SIGINT", exit)
 process.on("SIGTERM", exit)
+
+// TODO: need channel display name
+// TODO: impl appending to image_fs
+// TODO: clean up code
+
+const g = await meta_youtube_channel('UC3aIH4ewewheZobgRskmQSw')
+console.log(g)

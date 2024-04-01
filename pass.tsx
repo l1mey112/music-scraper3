@@ -1,15 +1,15 @@
 import { SQLiteColumn } from "drizzle-orm/sqlite-core"
 import { CredentialKind } from "./cred"
-import { component_invalidate, component_register, emit_log, route_register } from "./server"
+import { ProgressRef, component_invalidate, component_register, emit_log, route_register } from "./server"
 import { MaybePromise } from "./types"
 import { sql } from "drizzle-orm"
 import * as schema from './schema'
 import { db } from "./db"
-import { pass_youtube_channel_extrapolate_youtube_video, pass_youtube_channel_meta_youtube_channel, pass_youtube_video_meta_youtube_video } from "./passes/youtube"
+import { pass_youtube_channel_extrapolate_channel_id, pass_youtube_channel_meta_youtube_channel, pass_youtube_video_meta_youtube_video } from "./passes/youtube"
 
 const passes: PassBlock[] = [
 	{ name: 'youtube_video.meta.youtube_video', fn: pass_youtube_video_meta_youtube_video },
-	{ name: 'youtube_channel.extrapolate.youtube_video', fn: pass_youtube_channel_extrapolate_youtube_video },
+	{ name: 'youtube_channel.extrapolate.channel_id', fn: pass_youtube_channel_extrapolate_channel_id },
 	{ name: 'youtube_channel.meta.youtube_channel', fn: pass_youtube_channel_meta_youtube_channel },
 ]
 
@@ -209,9 +209,15 @@ let pass_state: PassState = {
 	trip_count: 0,
 }
 
-export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit: number, next: (v: T) => Promise<void>): Promise<void> {
+export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit: number, ref: ProgressRef | undefined, next: (v: T) => Promise<void>): Promise<void> {
 	const active_promises: Promise<void>[] = [];
 
+	if (ref) {
+		ref.emit(0)
+	}
+
+	let di = 0
+	const diff = 100 / arr.length
 	for (const item of arr) {
 		// wait until there's room for a new operation
 		while (active_promises.length >= concurrency_limit) {
@@ -220,6 +226,12 @@ export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit:
 
 		const next_operation = next(item);
 		active_promises.push(next_operation);
+
+		// update progress
+		if (ref) {
+			di += diff
+			ref.emit(di)
+		}
 
 		next_operation.finally(() => {
 			const index = active_promises.indexOf(next_operation);
@@ -233,7 +245,7 @@ export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit:
 	await Promise.all(active_promises);
 }
 
-const WYHASH_SEED = 761864364875522238n
+/* const WYHASH_SEED = 761864364875522238n
 
 export function pass_backoff_register(id: number, column: SQLiteColumn, name: PassIdentifier) {
 	const hash = Bun.hash.wyhash(name, WYHASH_SEED)
@@ -264,4 +276,4 @@ export function pass_backoff_sql(column: SQLiteColumn, name: PassIdentifier) {
 	return sql`(${idstr} || ${column}) not exists (
 		select ident from pass_backoff where pass = ${name}
 	)`
-}
+} */
