@@ -1,8 +1,19 @@
+import { SQLiteColumn } from "drizzle-orm/sqlite-core"
 import { CredentialKind } from "./cred"
 import { component_invalidate, component_register, emit_log, route_register } from "./server"
 import { MaybePromise } from "./types"
+import { sql } from "drizzle-orm"
+import * as schema from './schema'
+import { db } from "./db"
+import { pass_youtube_channel_extrapolate_youtube_video, pass_youtube_channel_meta_youtube_channel, pass_youtube_video_meta_youtube_video } from "./passes/youtube"
 
-const trip_count_max = 10
+const passes: PassBlock[] = [
+	{ name: 'youtube_video.meta.youtube_video', fn: pass_youtube_video_meta_youtube_video },
+	{ name: 'youtube_channel.extrapolate.youtube_video', fn: pass_youtube_channel_extrapolate_youtube_video },
+	{ name: 'youtube_channel.meta.youtube_channel', fn: pass_youtube_channel_meta_youtube_channel },
+]
+
+const TRIP_COUNT_MAX = 10
 
 type PassState = {
 	state: PassStateEnum
@@ -27,15 +38,13 @@ enum PassStateEnum {
 	Stopped,
 }
 
-type PassField = 'track' | 'album' | 'artist'
+type PassField = 'track' | 'album' | 'artist' | 'youtube_video' | 'youtube_channel'
 type PassKind = 'meta' | 'extrapolate' | 'media'
 type PassIdentifier = `${PassField}.${PassKind}.${string}`
 
-type PassFnReturn = boolean | void
-
 type PassBlock = {
 	name: PassIdentifier // split('.', 3)
-	fn: () => MaybePromise<PassFnReturn>
+	fn: () => MaybePromise<boolean | void>
 	cred?: CredentialKind[] // capabilities
 }
 
@@ -77,8 +86,8 @@ async function pass_job() {
 		}
 		pass_state.idx = 0
 		pass_state.trip_count++
-		if (pass_state.trip_count >= trip_count_max) {
-			emit_log(`[pass_job] forward progress trip count exceeded max of <i>${trip_count_max}</i>`, 'error')
+		if (pass_state.trip_count >= TRIP_COUNT_MAX) {
+			emit_log(`[pass_job] forward progress trip count exceeded max of <i>${TRIP_COUNT_MAX}</i>`, 'error')
 			pass_state.state = PassStateEnum.Stopped
 			pass_state.trip_count = 0
 			break exit
@@ -110,16 +119,6 @@ function pass_run() {
 
 	pass_job()
 }
-
-const passes: PassBlock[] = [
-	{ name: 'track.meta.weak0', fn: async () => { emit_log('track.meta.weak0'); await Bun.sleep(100) } },
-	{ name: 'track.meta.weak1', fn: async () => { emit_log('track.meta.weak1'); await Bun.sleep(100) } },
-	{ name: 'track.meta.weak2', fn: async () => { emit_log('track.meta.weak2'); await Bun.sleep(100) } },
-	{ name: 'track.meta.weak3', fn: async () => { emit_log('track.meta.weak3'); await Bun.sleep(100) } },
-	{ name: 'track.meta.weak4', fn: async () => { emit_log('track.meta.weak4'); await Bun.sleep(100) } },
-	{ name: 'track.meta.weak5', fn: async () => { emit_log('track.meta.weak5'); await Bun.sleep(100) } },
-	{ name: 'track.meta.weak6', fn: async () => { emit_log('track.meta.weak6'); await Bun.sleep(100) } },
-]
 
 function pass_tostring() {
 	return (
@@ -208,4 +207,61 @@ let pass_state: PassState = {
 	mutations: new Set(),
 	state: PassStateEnum.Stopped,
 	trip_count: 0,
+}
+
+export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit: number, next: (v: T) => Promise<void>): Promise<void> {
+	const active_promises: Promise<void>[] = [];
+
+	for (const item of arr) {
+		// wait until there's room for a new operation
+		while (active_promises.length >= concurrency_limit) {
+			await Promise.race(active_promises);
+		}
+
+		const next_operation = next(item);
+		active_promises.push(next_operation);
+
+		next_operation.finally(() => {
+			const index = active_promises.indexOf(next_operation);
+			if (index !== -1) {
+				active_promises.splice(index, 1);
+			}
+		});
+	}
+
+	// wait for all active operations to complete
+	await Promise.all(active_promises);
+}
+
+const WYHASH_SEED = 761864364875522238n
+
+export function pass_backoff_register(id: number, column: SQLiteColumn, name: PassIdentifier) {
+	const hash = Bun.hash.wyhash(name, WYHASH_SEED)
+	let idstr
+
+	switch (column) {
+		default: {
+			throw new Error(`unknown column reference`)
+		}
+	}
+
+	db.insert(schema.pass_backoff)
+		.values({ ident: idstr, utc: Date.now(), pass: hash })
+		.run()
+}
+
+// track_id -> "t"
+export function pass_backoff_sql(column: SQLiteColumn, name: PassIdentifier) {
+	const hash = Bun.hash.wyhash(name, WYHASH_SEED)
+	let idstr
+
+	switch (column) {
+		default: {
+			throw new Error(`unknown column reference`)
+		}
+	}
+
+	return sql`(${idstr} || ${column}) not exists (
+		select ident from pass_backoff where pass = ${name}
+	)`
 }

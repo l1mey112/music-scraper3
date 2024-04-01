@@ -1,4 +1,4 @@
-import { youtube_channel, youtube_id_from_url, youtube_video } from "../youtube_api_meta";
+import { meta_youtube_channel, youtube_id_from_url, meta_youtube_video } from "../passes/youtube";
 
 export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit: number, next: (v: T) => Promise<void>): Promise<void> {
 	const active_promises: Promise<void>[] = [];
@@ -36,7 +36,7 @@ await run_with_concurrency_limit(all, 4, async (url) => {
 	const video_id = youtube_id_from_url(url)!
 
 	try {
-		const video = await youtube_video(video_id)
+		const video = await meta_youtube_video(video_id)
 		const channel_id = video.channelId
 
 		for (const url of video.description.matchAll(url_regex)) {
@@ -44,7 +44,7 @@ await run_with_concurrency_limit(all, 4, async (url) => {
 			video_urls_in_all.add(url[0])
 		}
 
-		const channel = await youtube_channel(channel_id)
+		const channel = await meta_youtube_channel(channel_id)
 		
 		for (const url of channel.about.links) {
 			console.log(`new_channel_url(${channel_id}):`, url.url)
