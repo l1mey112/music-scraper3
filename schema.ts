@@ -1,4 +1,4 @@
-import { unique, sqliteTable, text, integer, SQLiteTable } from "drizzle-orm/sqlite-core";
+import { index, sqliteTable, text, integer, SQLiteTable, primaryKey } from "drizzle-orm/sqlite-core";
 import { ImageKind, PIdent, YoutubeChannelId, YoutubeVideoId } from "./types";
 
 // WITHOUT-ROWID: youtube_video
@@ -8,27 +8,28 @@ export const youtube_video = sqliteTable('youtube_video', {
 
 	name: text('name'),
 	description: text('description'),
-	description_links: text('links', { mode: "json" }).$type<string[]>(),
+	description_links: text('description_links', { mode: "json" }).$type<string[]>(),
 })
 
 // WITHOUT-ROWID: youtube_channel
 export const youtube_channel = sqliteTable('youtube_channel', {
 	id: text('id').$type<YoutubeChannelId>().primaryKey(),
 
+	name: text('name'), // display name
 	handle: text('handle'), // @pinocchiop
-	name: text('name'),
 	description: text('description'),
 	links: text('links', { mode: "json" }).$type<string[]>(),
 })
 
 // pass backoff for metadata
-// WITHOUT-ROWID: pass_backoff
 export const pass_backoff = sqliteTable('pass_backoff', {
-	utc: integer('utc').primaryKey(),
+	utc: integer('utc').notNull(),
 
-	ident: text('ident').$type<PIdent>().notNull(), // TODO: needs index
+	ident: text('ident').$type<PIdent>().notNull(),
 	pass: integer('pass').notNull(), // wyhash integer
-})
+}, (t) => ({
+	pidx: index("pass_backoff.ident_idx").on(t.ident),
+}))
 
 // persistent store
 // WITHOUT-ROWID: thirdparty:store
@@ -47,12 +48,13 @@ export const thirdparty_store = sqliteTable('thirdparty:store', {
 export const image_fs = sqliteTable('image_fs', {
 	hash: text('hash'),
 	url: text('url'),
-	ident: text('ident').$type<PIdent>().notNull(), // TODO: needs index
+	ident: text('ident').$type<PIdent>().notNull(),
 	kind: text('kind').$type<ImageKind>().notNull(),
 	width: integer('width').notNull(),
 	height: integer('height').notNull(),
 }, (t) => ({
-	unq: unique().on(t.hash, t.url)
+	pk: primaryKey({ columns: [t.hash, t.url] }),
+	pidx: index("image_fs.ident_idx").on(t.ident),
 }))
 
 export function permanent_ident(column: SQLiteTable, id: number): PIdent {

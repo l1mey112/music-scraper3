@@ -19,6 +19,3 @@ process.on("SIGTERM", exit)
 // TODO: need channel display name
 // TODO: impl appending to image_fs
 // TODO: clean up code
-
-const g = await meta_youtube_channel('UC3aIH4ewewheZobgRskmQSw')
-console.log(g)

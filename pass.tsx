@@ -5,11 +5,11 @@ import { MaybePromise } from "./types"
 import { sql } from "drizzle-orm"
 import * as schema from './schema'
 import { db } from "./db"
-import { pass_youtube_channel_extrapolate_channel_id, pass_youtube_channel_meta_youtube_channel, pass_youtube_video_meta_youtube_video } from "./passes/youtube"
+import { pass_youtube_channel_extrapolate_from_channel_id, pass_youtube_channel_meta_youtube_channel, pass_youtube_video_meta_youtube_video } from "./passes/youtube"
 
 const passes: PassBlock[] = [
 	{ name: 'youtube_video.meta.youtube_video', fn: pass_youtube_video_meta_youtube_video },
-	{ name: 'youtube_channel.extrapolate.channel_id', fn: pass_youtube_channel_extrapolate_channel_id },
+	{ name: 'youtube_channel.extrapolate.from_channel_id', fn: pass_youtube_channel_extrapolate_from_channel_id },
 	{ name: 'youtube_channel.meta.youtube_channel', fn: pass_youtube_channel_meta_youtube_channel },
 ]
 

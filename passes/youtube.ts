@@ -4,11 +4,14 @@ import * as schema from '../schema'
 import { run_with_concurrency_limit } from "../pass"
 import { ProgressRef } from "../server"
 
+
+// https://github.com/mattwright324/youtube-metadata
+const default_key = atob('QUl6YVN5QVNUTVFjay1qdHRGOHF5OXJ0RW50MUh5RVl3NUFtaEU4')
+
 // much slower, but we need the URLs
 export async function meta_youtube_channel(channel_id: string): Promise<YoutubeChannel> {
 	const resp = await fetch(`https://yt.lemnoslife.com/channels?part=snippet,about&id=${channel_id}`)
 	const json = await resp.json() as any
-	console.log(JSON.stringify(json))
 	const inner = json.items[0]
 
 	// trim the fat
@@ -17,14 +20,24 @@ export async function meta_youtube_channel(channel_id: string): Promise<YoutubeC
 		delete link.favicon
 	}
 
+	// lemnoslife doesn't provide display name
+	// youtube v3 doesn't provide links
+
+	//https://yt.lemnoslife.com/noKey/channels?part=snippet&id=
+	const yt_resp = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${default_key}&part=snippet&id=${channel_id}`, {
+		headers: {
+			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
+			"Referer": "https://mattw.io/",
+		}
+	})
+	const yt_json = await yt_resp.json() as any
+
 	return {
 		about: inner.about,
 		images: inner.snippet,
+		display_name: yt_json.items[0].snippet.title
 	}
 }
-
-// https://github.com/mattwright324/youtube-metadata
-const default_key = atob('QUl6YVN5QVNUTVFjay1qdHRGOHF5OXJ0RW50MUh5RVl3NUFtaEU4')
 
 // magnitudes faster
 async function meta_youtube_video(video_id: string): Promise<YoutubeVideo> {
@@ -65,14 +78,16 @@ function youtube_id_from_url(video_url: string): string | undefined {
 
 // youtube_video.meta.youtube_video
 export async function pass_youtube_video_meta_youtube_video() {
-	await Bun.sleep(100)
-
 	const url_regex = /(?:(?:(?:https?|ftp):)?\/\/)(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z0-9\u00a1-\uffff][a-z0-9\u00a1-\uffff-]{0,62})?[a-z0-9\u00a1-\uffff]\.)+(?:[a-z\u00a1-\uffff]{2,}\.?))(?::\d{2,5})?(?:[/?#]\S*)?/ig
 
 	const k = db.select({ id: schema.youtube_video.id })
 		.from(schema.youtube_video)
-		.where(sql`meta_youtube_video is null`)
+		.where(sql`channel_id is null or name is null or description is null or description_links is null`)
 		.all()
+	
+	if (k.length == 0) {
+		return
+	}
 
 	const pc = new ProgressRef('youtube_video.meta.youtube_video')
 
@@ -87,9 +102,9 @@ export async function pass_youtube_video_meta_youtube_video() {
 
 		db.update(schema.youtube_video)
 			.set({
+				channel_id: meta.channelId,
 				name: meta.title,
 				description: meta.description,
-				channel_id: meta.channelId,
 				description_links: Array.from(url_set),
 			})
 			.where(sql`id = ${id}`)
@@ -98,12 +113,12 @@ export async function pass_youtube_video_meta_youtube_video() {
 
 	pc.close()
 
-	return k.length > 0
+	return true
 }
 
-// youtube_channel.extrapolate.channel_id
+// youtube_channel.extrapolate.from_channel_id
 // no need for async, its an instant operation
-export function pass_youtube_channel_extrapolate_channel_id() {
+export function pass_youtube_channel_extrapolate_from_channel_id() {
 	let updated = 0
 	const k = db.select({ channel_id: schema.youtube_video.channel_id })
 		.from(schema.youtube_video)
@@ -129,10 +144,14 @@ export function pass_youtube_channel_extrapolate_channel_id() {
 
 // youtube_channel.meta.youtube_channel
 export async function pass_youtube_channel_meta_youtube_channel() {
-	/* const k = db.select({ id: schema.youtube_channel.id })
+	const k = db.select({ id: schema.youtube_channel.id })
 		.from(schema.youtube_channel)
-		.where(sql`meta_youtube_channel is null`)
+		.where(sql`handle is null or name is null or description is null or links is null`)
 		.all()
+
+	if (k.length == 0) {
+		return
+	}
 
 	const pc = new ProgressRef('youtube_channel.meta.youtube_channel')
 
@@ -142,7 +161,7 @@ export async function pass_youtube_channel_meta_youtube_channel() {
 		db.update(schema.youtube_channel)
 			.set({
 				handle: channel.about.handle,
-				name: channel.about.,
+				name: channel.display_name,
 				description: channel.about.description,
 				links: channel.about.links.map(({ url }) => url),
 			})
@@ -152,7 +171,7 @@ export async function pass_youtube_channel_meta_youtube_channel() {
 
 	pc.close()
 
-	return k.length > 0 */
+	return true
 }
 
 type YoutubeImage = {
@@ -194,6 +213,7 @@ type YoutubeChannelSnippet = {
 type YoutubeChannel = {
 	about: YoutubeChannelAbout
 	images: YoutubeChannelSnippet
+	display_name: string
 }
 
 type YoutubeVideo = {
