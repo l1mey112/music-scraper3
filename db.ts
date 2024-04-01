@@ -11,7 +11,7 @@ sqlite.exec("pragma synchronous = normal;") // safe with WAL
 
 export const db: BunSQLiteDatabase<typeof schema> = drizzle(sqlite, { schema })
 
-function db_close() {
+export function db_close() {
 	sqlite.exec("pragma wal_checkpoint(TRUNCATE);") // checkpoint WAL
 	sqlite.exec("pragma journal_mode = DELETE;") // delete wal
 	sqlite.exec("pragma vacuum;") // vacuum
@@ -20,5 +20,3 @@ function db_close() {
 	sqlite.close() // close the db
 	console.log('db: closed')
 }
-
-process.on("beforeExit", db_close)

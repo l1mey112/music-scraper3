@@ -2,15 +2,10 @@ import { ServerWebSocket } from "bun";
 
 // @ts-ignore - need this for autoreloads on edit
 import index from './ui-static/index.html'
+import { MaybePromise } from "./types"
 
 const js = Bun.file('./ui-static/index.js')
 const font = Bun.file('./ui-static/TerminusTTF.woff2')
-
-/* interface RenderFn {
-	toString(): string
-} */
-
-type MaybePromise<T> = T | Promise<T>
 
 interface ToString {
 	toString(): string
@@ -66,7 +61,7 @@ const route_map = new Map<string, RouteFn>()
 
 type HTTPMethod = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'CONNECT' | 'OPTIONS' | 'TRACE' | 'PATCH'
 
-export function register_route(method: HTTPMethod, route: string, f: RouteFn) {
+export function route_register(method: HTTPMethod, route: string, f: RouteFn) {
 	const str = `${method}:/ui/${route}`
 	if (route_map.has(str)) {
 		throw new Error(`route ${str} already registered`)

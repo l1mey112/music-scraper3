@@ -65,6 +65,15 @@
 			border-bottom: 1px dotted black;
 			cursor: pointer;
 		}
+		.table-running {
+			background-color: #54935e;
+		}
+		.table-stopped {
+			background-color: #723d08;
+		}
+		.table-pending-stop {
+			background-color: rgb(164, 162, 29);
+		}
 		@keyframes progress-animation {
 			0% {
 				background-position: 0% 50%;
@@ -90,6 +99,17 @@
 			background-color: #1d1e1e;
 			color: white;
 			border: 1px solid white;
+		}
+		input[type=checkbox] {
+			word-break: keep-all;
+			display: none;
+		}
+		input[type=checkbox] + label:before {
+			cursor: pointer;
+			content: '[ ] ';
+		}
+		input[type=checkbox]:checked + label:before {
+			content: '[x] ';
 		}
 	</style>
 

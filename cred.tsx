@@ -1,6 +1,6 @@
 import * as schema from './schema'
 import { db } from "./db"
-import { component_invalidate, component_register, emit_log, register_route } from "./server"
+import { component_invalidate, component_register, emit_log, route_register } from "./server"
 import { sql } from 'drizzle-orm'
 
 export type CredentialKind = keyof CredentialStore
@@ -159,7 +159,6 @@ function cred_table(full_render: boolean, values: string[][], props: TableProps)
 	if (full_render) {
 		table = <details>
 			<summary>{props.title} {props.tooltip && <span class="tooltip" data-tooltip title={props.tooltip}> [?]</span>}<hr /></summary>
-			{/* for some reason, HTMX always forces multipart/form-data */}
 			<form hx-swap="none" hx-post={`/ui/cred_add`} hx-trigger="submit">
 			<input type="hidden" name="kind" value={props.kind}></input>
 			{table}
@@ -199,8 +198,8 @@ function invalidate_kind(kind: CredentialKind) {
 	component_invalidate(fn)
 }
 
-register_route('POST', 'cred_delete', cred_delete)
-register_route('POST', 'cred_add', cred_add)
+route_register('POST', 'cred_delete', cred_delete)
+route_register('POST', 'cred_add', cred_add)
 
 /* type Credential =
 	| 'spotify'

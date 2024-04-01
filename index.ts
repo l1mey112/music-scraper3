@@ -1,7 +1,10 @@
 import './server' // sideeffect
 import './cred' // sideeffect
+import './pass' // sideeffect
+import { db_close } from './db'
 
 function exit() {
+	db_close()
 	process.exit(0)
 }
 
