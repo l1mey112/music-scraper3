@@ -1,10 +1,14 @@
 import { index, sqliteTable, text, integer, SQLiteTable, primaryKey } from "drizzle-orm/sqlite-core";
 import { ImageKind, PIdent, YoutubeChannelId, YoutubeVideoId } from "./types";
 
+// .references(() => youtube_channel.id),
+// these are no-ops in sqlite with drizles configuration, they don't create indexes
+// a default index is created on primary keys anyway
+
 // WITHOUT-ROWID: youtube_video
 export const youtube_video = sqliteTable('youtube_video', {
 	id: text('id').$type<YoutubeVideoId>().primaryKey(),
-	channel_id: text('channel_id').$type<YoutubeChannelId>().references(() => youtube_channel.id),
+	channel_id: text('channel_id').$type<YoutubeChannelId>(),
 
 	name: text('name'),
 	description: text('description'),
@@ -42,6 +46,9 @@ export const thirdparty_store = sqliteTable('thirdparty:store', {
 // ---------+------|-----------
 // url      |  o   |  o
 // null url |  o   |  x
+
+// TODO: WITHOUT ROWID tables can't have nulls in the PKs?
+//       this might throw badly
 
 // imageFS is lazy
 // WITHOUT-ROWID: image_fs
