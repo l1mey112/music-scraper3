@@ -5,12 +5,16 @@ import { MaybePromise } from "./types"
 import { sql } from "drizzle-orm"
 import * as schema from './schema'
 import { db } from "./db"
+
 import { pass_youtube_channel_extrapolate_from_channel_id, pass_youtube_channel_meta_youtube_channel, pass_youtube_video_meta_youtube_video } from "./passes/youtube"
+import { pass_links_classify_strong, pass_links_classify_weak } from "./passes/links"
 
 const passes: PassBlock[] = [
 	{ name: 'youtube_video.meta.youtube_video', fn: pass_youtube_video_meta_youtube_video },
 	{ name: 'youtube_channel.extrapolate.from_channel_id', fn: pass_youtube_channel_extrapolate_from_channel_id },
 	{ name: 'youtube_channel.meta.youtube_channel', fn: pass_youtube_channel_meta_youtube_channel },
+	{ name: 'links.classify.weak', fn: pass_links_classify_weak },
+	{ name: 'links.classify.strong', fn: pass_links_classify_strong }
 ]
 
 const TRIP_COUNT_MAX = 10
@@ -38,8 +42,8 @@ enum PassStateEnum {
 	Stopped,
 }
 
-type PassField = 'track' | 'album' | 'artist' | 'youtube_video' | 'youtube_channel'
-type PassKind = 'meta' | 'extrapolate' | 'media'
+type PassField = 'track' | 'album' | 'artist' | 'youtube_video' | 'youtube_channel' | 'links'
+type PassKind = 'meta' | 'extrapolate' | 'media' | 'classify'
 type PassIdentifier = `${PassField}.${PassKind}.${string}`
 
 type PassBlock = {
@@ -210,7 +214,7 @@ let pass_state: PassState = {
 }
 
 export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit: number, ref: ProgressRef | undefined, next: (v: T) => Promise<void>): Promise<void> {
-	const active_promises: Promise<void>[] = [];
+	const active_promises: Promise<void>[] = []
 
 	if (ref) {
 		ref.emit(0)
@@ -221,11 +225,11 @@ export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit:
 	for (const item of arr) {
 		// wait until there's room for a new operation
 		while (active_promises.length >= concurrency_limit) {
-			await Promise.race(active_promises);
+			await Promise.race(active_promises)
 		}
 
-		const next_operation = next(item);
-		active_promises.push(next_operation);
+		const next_operation = next(item)
+		active_promises.push(next_operation)
 
 		// update progress
 		if (ref) {
@@ -234,15 +238,15 @@ export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit:
 		}
 
 		next_operation.finally(() => {
-			const index = active_promises.indexOf(next_operation);
+			const index = active_promises.indexOf(next_operation)
 			if (index !== -1) {
-				active_promises.splice(index, 1);
+				active_promises.splice(index, 1)
 			}
-		});
+		})
 	}
 
 	// wait for all active operations to complete
-	await Promise.all(active_promises);
+	await Promise.all(active_promises)
 }
 
 /* const WYHASH_SEED = 761864364875522238n

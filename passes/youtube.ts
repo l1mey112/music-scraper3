@@ -3,13 +3,14 @@ import { db } from "../db"
 import * as schema from '../schema'
 import { run_with_concurrency_limit } from "../pass"
 import { ProgressRef } from "../server"
+import { db_links_append } from "./links"
 
 
 // https://github.com/mattwright324/youtube-metadata
 const default_key = atob('QUl6YVN5QVNUTVFjay1qdHRGOHF5OXJ0RW50MUh5RVl3NUFtaEU4')
 
 // much slower, but we need the URLs
-export async function meta_youtube_channel(channel_id: string): Promise<YoutubeChannel> {
+async function meta_youtube_channel(channel_id: string): Promise<YoutubeChannel> {
 	const resp = await fetch(`https://yt.lemnoslife.com/channels?part=snippet,about&id=${channel_id}`)
 	const json = await resp.json() as any
 	const inner = json.items[0]
@@ -82,9 +83,9 @@ export async function pass_youtube_video_meta_youtube_video() {
 
 	const k = db.select({ id: schema.youtube_video.id })
 		.from(schema.youtube_video)
-		.where(sql`channel_id is null or name is null or description is null or description_links is null`)
+		.where(sql`channel_id is null or name is null or description is null`)
 		.all()
-	
+
 	if (k.length == 0) {
 		return
 	}
@@ -105,10 +106,11 @@ export async function pass_youtube_video_meta_youtube_video() {
 				channel_id: meta.channelId,
 				name: meta.title,
 				description: meta.description,
-				description_links: Array.from(url_set),
 			})
 			.where(sql`id = ${id}`)
 			.run()
+
+		db_links_append(schema.youtube_video, id, Array.from(url_set))
 	})
 
 	pc.close()
@@ -146,7 +148,7 @@ export function pass_youtube_channel_extrapolate_from_channel_id() {
 export async function pass_youtube_channel_meta_youtube_channel() {
 	const k = db.select({ id: schema.youtube_channel.id })
 		.from(schema.youtube_channel)
-		.where(sql`handle is null or name is null or description is null or links is null`)
+		.where(sql`handle is null or name is null or description is null`)
 		.all()
 
 	if (k.length == 0) {
@@ -158,15 +160,19 @@ export async function pass_youtube_channel_meta_youtube_channel() {
 	await run_with_concurrency_limit(k, 5, pc, async ({ id }) => {
 		const channel = await meta_youtube_channel(id)
 
+		// channel.about.description can be null or undefined
+
 		db.update(schema.youtube_channel)
 			.set({
 				handle: channel.about.handle,
 				name: channel.display_name,
-				description: channel.about.description,
-				links: channel.about.links.map(({ url }) => url),
+				description: channel.about.description ?? '',
 			})
 			.where(sql`id = ${id}`)
 			.run()
+
+		const links = channel.about.links.map(({ url }) => url)
+		db_links_append(schema.youtube_video, id, links)
 	})
 
 	pc.close()
@@ -195,7 +201,7 @@ type YoutubeChannelAbout = {
 		subscriberCount: number
 		videoCount: number
 	} */
-	description: string
+	description?: string | undefined
 	details: {
 		location: string
 	}
