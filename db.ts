@@ -8,6 +8,7 @@ const sqlite: Database = new Database('db.sqlite', { create: false, readwrite: t
 // https://phiresky.github.io/blog/2020/sqlite-performance-tuning/
 sqlite.exec("pragma journal_mode = WAL;")
 sqlite.exec("pragma synchronous = normal;") // safe with WAL
+sqlite.loadExtension("./hdist.so") // hdist.c
 
 export const db: BunSQLiteDatabase<typeof schema> = drizzle(sqlite, { schema })
 

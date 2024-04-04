@@ -1,2 +1,4 @@
+preload = ["./sh/hdist_compile.ts"]
+
 [loader]
 ".html" = "text"
