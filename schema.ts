@@ -1,5 +1,5 @@
 import { index, sqliteTable, text, integer, SQLiteTable, primaryKey, unique } from "drizzle-orm/sqlite-core";
-import { DBHash, ImageKind, PIdent, YoutubeChannelId, YoutubeVideoId } from "./types";
+import { LiteralHash, ImageKind, PIdent, YoutubeChannelId, YoutubeVideoId, FSHash } from "./types";
 
 // .references(() => youtube_channel.id),
 // these are no-ops in sqlite with drizles configuration, they don't create indexes
@@ -28,7 +28,7 @@ export const pass_backoff = sqliteTable('pass_backoff', {
 	utc: integer('utc').notNull(),
 
 	ident: text('ident').$type<PIdent>().notNull(),
-	pass: integer('pass').$type<DBHash>().notNull(), // wyhash integer
+	pass: integer('pass').$type<LiteralHash>().notNull(), // wyhash integer
 }, (t) => ({
 	pidx: index("pass_backoff.ident_idx").on(t.ident),
 }))
@@ -59,18 +59,18 @@ export const links = sqliteTable('links', {
 // TODO: WITHOUT ROWID tables can't have nulls in the PKs?
 //       this might throw badly
 
-// imageFS is lazy
-// WITHOUT-ROWID: image_fs
-export const image_fs = sqliteTable('image_fs', {
-	hash: text('hash'),
+// imageFS is lazy, relies on rowid
+export const images = sqliteTable('images', {
+	hash: text('hash').$type<FSHash>(),
 	url: text('url'),
 	ident: text('ident').$type<PIdent>().notNull(),
 	kind: text('kind').$type<ImageKind>().notNull(),
 	width: integer('width').notNull(),
 	height: integer('height').notNull(),
 }, (t) => ({
-	pk: primaryKey({ columns: [t.hash, t.url] }),
-	pidx: index("image_fs.ident_idx").on(t.ident),
+	pkidx0: index("images.pkidx0").on(t.hash),
+	pkidx1: index("images.pkidx1").on(t.url),
+	pidx: index("images.ident_idx").on(t.ident),
 }))
 
 export function permanent_ident(column: SQLiteTable, id: number): PIdent {

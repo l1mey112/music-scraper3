@@ -1,8 +1,6 @@
 import { parse as tldts_parse } from "tldts"
 import * as schema from '../schema'
 import { db } from "../db"
-import { db_hash, db_ident_pk } from "../misc"
-import { SQLiteTable } from "drizzle-orm/sqlite-core"
 import { sql } from "drizzle-orm"
 import { run_with_concurrency_limit } from "../pass"
 import { ProgressRef } from "../server"
@@ -268,21 +266,4 @@ export async function pass_links_classify_strong() {
 	pc.close()
 
 	return updated > 0
-}
-
-export function db_links_append(pk: SQLiteTable, pk_id: string | number, urls: string[]) {
-	if (urls.length === 0) {
-		return
-	}
-
-	const links = urls.map((url) => ({
-		ident: db_ident_pk(pk) + pk_id,
-		kind: 'unknown',
-		data: url,
-	}))
-
-	db.insert(schema.links)
-		.values(links)
-		.onConflictDoNothing()
-		.run()
 }

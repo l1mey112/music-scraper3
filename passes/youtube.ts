@@ -3,8 +3,21 @@ import { db } from "../db"
 import * as schema from '../schema'
 import { run_with_concurrency_limit } from "../pass"
 import { ProgressRef } from "../server"
-import { db_links_append } from "./links"
+import { db_links_append } from "./../misc"
+import { db_images_append_url } from "./images"
+import { ImageKind } from "../types"
 
+function largest_image(arr: Iterable<YoutubeImage>): YoutubeImage | undefined {
+	let largest: YoutubeImage | undefined = undefined;
+
+	for (const image of arr) {
+		if (!largest || image.width * image.height > largest.width * largest.height) {
+			largest = image;
+		}
+	}
+
+	return largest;
+}
 
 // https://github.com/mattwright324/youtube-metadata
 const default_key = atob('QUl6YVN5QVNUTVFjay1qdHRGOHF5OXJ0RW50MUh5RVl3NUFtaEU4')
@@ -109,6 +122,13 @@ export async function pass_youtube_video_meta_youtube_video() {
 		const meta = await meta_youtube_video(id)
 		const url_set = new Set<string>()
 
+		// find largest thumbnail and save
+		const thumb = largest_image(Object.values(meta.thumbnails))
+
+		if (thumb) {
+			db_images_append_url(schema.youtube_video, id, 'yt_thumbnail', thumb.url, thumb.width, thumb.height)
+		}
+
 		// extract all URLs from the description
 		for (const url of meta.description.matchAll(url_regex)) {
 			url_set.add(url[0])
@@ -172,6 +192,25 @@ export async function pass_youtube_channel_meta_youtube_channel() {
 
 	await run_with_concurrency_limit(k, 2, pc, async ({ id }) => {
 		const channel = await meta_youtube_channel(id)
+
+		type ChannelKey = keyof typeof channel.images
+
+		// 'yt_avatar' | 'yt_banner' | 'yt_tv_banner' | 'yt_mobile_banner'
+		const img_map: Record<ChannelKey, ImageKind> = {
+			avatar: 'yt_avatar',
+			banner: 'yt_banner',
+			tvBanner: 'yt_tv_banner',
+			mobileBanner: 'yt_mobile_banner',
+		}
+
+		for (const [key, kind] of Object.entries(img_map)) {
+			const images = channel.images[key as ChannelKey]
+			const thumb = largest_image(images)
+
+			if (thumb) {
+				db_images_append_url(schema.youtube_channel, id, kind, thumb.url, thumb.width, thumb.height)
+			}
+		}
 
 		// channel.about.description can be null or undefined
 
