@@ -56,6 +56,19 @@ async function meta_youtube_video(video_id: string): Promise<YoutubeVideo> {
 	return inner.snippet
 }
 
+export async function meta_youtube_handle_to_id(handle: string): Promise<string> {
+	// could fetch `https://yt.lemnoslife.com/channels?handle=@HANDLE` but that is slower than youtube v3
+	const resp = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${default_key}&forHandle=${handle}&part=snippet`, {
+		headers: {
+			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
+			"Referer": "https://mattw.io/",
+		}
+	})
+
+	const json: any = await resp.json()
+	return json.items[0].id
+}
+
 // TODO: use later
 function youtube_id_from_url(video_url: string): string | undefined {
 	const regex =  [
@@ -157,7 +170,7 @@ export async function pass_youtube_channel_meta_youtube_channel() {
 
 	const pc = new ProgressRef('youtube_channel.meta.youtube_channel')
 
-	await run_with_concurrency_limit(k, 5, pc, async ({ id }) => {
+	await run_with_concurrency_limit(k, 2, pc, async ({ id }) => {
 		const channel = await meta_youtube_channel(id)
 
 		// channel.about.description can be null or undefined

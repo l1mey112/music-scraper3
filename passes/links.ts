@@ -6,6 +6,7 @@ import { SQLiteTable } from "drizzle-orm/sqlite-core"
 import { sql } from "drizzle-orm"
 import { run_with_concurrency_limit } from "../pass"
 import { ProgressRef } from "../server"
+import { meta_youtube_handle_to_id } from "./youtube"
 
 type strin2 = `${string}/${string}`
 
@@ -73,7 +74,7 @@ type LinkMatch = {
 	//capture_subdomain?: boolean
 }
 
-type ClassifyLinks = Record<Exclude<string, "unknown">, LinkMatch[]>
+type ClassifyBlock = Record<Exclude<string, "unknown">, LinkMatch[]>
 
 type WeakClassifyLinks = Record<Exclude<Link["kind"], "unknown">, LinkMatch[]>
 const weak_classify_links: WeakClassifyLinks = {
@@ -131,7 +132,7 @@ const weak_classify_links: WeakClassifyLinks = {
 	],
 }
 
-function link_classify(url: string, classify_links: ClassifyLinks): { kind: string, data: string } | undefined {
+function link_classify(url: string, classify_links: ClassifyBlock): { kind: string, data: string } | undefined {
 	// sometimes people paste links without https://
 	if (!url.startsWith('http://') && !url.startsWith('https://')) {
 		url = 'https://' + url
@@ -222,7 +223,7 @@ export function pass_links_classify_weak() {
 	return updated > 0
 }
 
-const strong_classify_links_helper: ClassifyLinks = {
+const strong_classify_links_helper: ClassifyBlock = {
 	'youtube_channel_handle': [
 		{ domain: 'youtube.com', r: /\/@([\S^\/]+)/ },
 		{ domain: 'youtube.com', r: /\/c\/([\S^\/]+)/ },
@@ -247,10 +248,10 @@ export async function pass_links_classify_strong() {
 
 		switch (classified.kind) {
 			case 'youtube_channel_handle': {
-				// convert handle into channel id
-				/* const channel_id = await meta_youtube_channel_handle(classified.data)
-				classified.kind = 'youtube_channel_id' */
-				return // TODO
+				const channel_id = await meta_youtube_handle_to_id(classified.data)
+				classified.data = channel_id
+				classified.kind = 'youtube_channel_id'
+				break
 			}
 			default: {
 				return
