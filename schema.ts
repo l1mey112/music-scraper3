@@ -1,4 +1,4 @@
-import { index, sqliteTable, text, integer, SQLiteTable, primaryKey, unique } from "drizzle-orm/sqlite-core";
+import { index, sqliteTable, text, integer, SQLiteTable, unique } from "drizzle-orm/sqlite-core";
 import { LiteralHash, ImageKind, PIdent, YoutubeChannelId, YoutubeVideoId, FSHash } from "./types";
 
 // .references(() => youtube_channel.id),
@@ -68,19 +68,7 @@ export const images = sqliteTable('images', {
 	width: integer('width').notNull(),
 	height: integer('height').notNull(),
 }, (t) => ({
-	pkidx0: index("images.pkidx0").on(t.hash),
-	pkidx1: index("images.pkidx1").on(t.url),
+	pkidx0: index("images.pkidx0").on(t.hash), // ????
+	pkidx1: index("images.pkidx1").on(t.url),  // ????
 	pidx: index("images.ident_idx").on(t.ident),
 }))
-
-export function permanent_ident(column: SQLiteTable, id: number): PIdent {
-	let ppid
-	
-	switch (column) {
-		case youtube_video: ppid = 'yv'; break
-		case youtube_channel: ppid = 'yc'; break
-		default: throw new Error(`unknown column ${column}`)
-	}
-	
-	return ppid + id
-}

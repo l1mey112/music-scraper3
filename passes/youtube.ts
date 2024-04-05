@@ -46,6 +46,9 @@ async function meta_youtube_channel(channel_id: string): Promise<YoutubeChannel>
 		}
 	})
 	const yt_json = await yt_resp.json() as any
+	if (json.items.length === 0) {
+		throw new Error(`youtube channel req is empty (id: ${channel_id})`)
+	}
 
 	return {
 		about: inner.about,
@@ -66,6 +69,10 @@ async function meta_youtube_video(video_id: string): Promise<YoutubeVideo> {
 	})
 
 	const json = await resp.json() as any
+	if (json.items.length === 0) {
+		throw new Error(`youtube video req is empty (id: ${video_id})`)
+	}
+
 	const inner = json.items[0]
 	return inner.snippet
 }
@@ -80,6 +87,10 @@ export async function meta_youtube_handle_to_id(handle: string): Promise<string>
 	})
 
 	const json: any = await resp.json()
+	if (json.items.length === 0) {
+		throw new Error(`youtube handle req is empty (id: ${handle})`)
+	}
+
 	return json.items[0].id
 }
 
@@ -106,7 +117,6 @@ function youtube_id_from_url(video_url: string): string | undefined {
 
 // youtube_video.meta.youtube_video
 export async function pass_youtube_video_meta_youtube_video() {
-
 	const k = db.select({ id: schema.youtube_video.id })
 		.from(schema.youtube_video)
 		.where(sql`channel_id is null or name is null or description is null`)

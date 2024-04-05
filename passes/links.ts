@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm"
 import { run_with_concurrency_limit } from "../pass"
 import { ProgressRef } from "../server"
 import { meta_youtube_handle_to_id } from "./youtube"
+import { SQLiteTable } from "drizzle-orm/sqlite-core"
 
 // matches ...99a7_q9XuZY）←｜→次作：（しばしまたれよ）
 //                       ^^^^^^^^^^^^^^^^^^^^^^^^^ very incorrect
@@ -87,7 +88,7 @@ type Link =
 type LinkMatch = {
 	subdomain?: string // www -> undefined
 	domain: string
-	r: RegExp // matched with stripped forward /
+	r?: RegExp // matched with stripped forward /
 	m?: (string)[]
 	//capture_subdomain?: boolean
 }
@@ -186,13 +187,15 @@ function link_classify(url: string, classify_links: ClassifyBlock): { kind: stri
 
 			const match_idents = []
 
-			const re_match = match.r.exec(url_obj.pathname)
-			if (!re_match) {
-				continue nmatch
-			}
+			if (match.r) {
+				const re_match = match.r.exec(url_obj.pathname)
+				if (!re_match) {
+					continue nmatch
+				}
 
-			if (re_match.length > 1) {
-				match_idents.push(...re_match.slice(1))
+				if (re_match.length > 1) {
+					match_idents.push(...re_match.slice(1))
+				}
 			}
 
 			if (match.m) {
@@ -205,7 +208,7 @@ function link_classify(url: string, classify_links: ClassifyBlock): { kind: stri
 				}
 			}
 
-			if (match_idents.length === 0) {
+			if ((!match.r || !match.m) && match_idents.length === 0) {
 				throw new Error('no match idents found - should never happen')
 			}
 
@@ -287,3 +290,81 @@ export async function pass_links_classify_strong() {
 
 	return updated > 0
 }
+
+// all.extrapolate.from_links
+export function pass_all_extrapolate_from_links() {
+	// select from links where those identifiers don't show up in the tabls
+
+	const k = db.select({ ident: schema.links.data, kind: schema.links.kind })
+		.from(schema.links)
+		.leftJoin(schema.youtube_video,   sql`substr(${schema.links.ident}, 2) = 'yv' and substr(${schema.links.ident}, 3) = ${schema.youtube_video.id}`)
+		.leftJoin(schema.youtube_channel, sql`substr(${schema.links.ident}, 2) = 'yc' and substr(${schema.links.ident}, 3) = ${schema.youtube_channel.id}`)
+		.where(sql`(${schema.links.kind} = 'youtube_video_id' or ${schema.links.kind} = 'youtube_channel_id') and (${schema.youtube_video.id} is null and ${schema.youtube_channel.id} is null)`)
+		.all()
+
+	const table_map = new Map<SQLiteTable, string[]>()
+	const upsert = (table: SQLiteTable, ident: string) => {
+		if (table_map.has(table)) {
+			table_map.get(table)!.push(ident)
+		} else {
+			table_map.set(table, [ident])
+		}
+	}
+
+	for (const { ident, kind } of k) {
+		switch (kind) {
+			case 'youtube_video_id':   upsert(schema.youtube_video, ident); break
+			case 'youtube_channel_id': upsert(schema.youtube_channel, ident); break
+		}
+	}
+
+	console.log(table_map)
+
+	for (const [schema, ident] of table_map) {
+		db.insert(schema)
+			.values(ident.map(it => ({ id: it }))) // () => { id: it } -> this is a fucking label with a hanging expression
+			.onConflictDoNothing()
+			.run()
+	}
+
+	return k.length > 0
+}
+
+// https://gist.github.com/HoangTuan110/e6eb412ed32657c841fcc2c12c156f9d
+const link_shorteners = ['bit.ly', 'cutt.ly', 'nico.ms', 't.co']
+
+const link_shorteners_classify: ClassifyBlock = {
+	'bitly':    [ { domain: 'bit.ly'  } ],
+	'cuttly':   [ { domain: 'cutt.ly' } ],
+	'niconico': [ { domain: 'nico.ms' } ],
+	'tco':      [ { domain: 't.co'    } ],
+}
+
+// links.classify.link_shorteners
+/* export async function pass_links_classify_link_shorteners() {
+	let updated = 0
+	const k = db.select({ id: schema.links.id, data: schema.links.data })
+		.from(schema.links)
+		.where(sql`kind = 'unknown'`)
+		.all()
+
+	const pc = new ProgressRef('links.classify.link_shorteners')
+
+	await run_with_concurrency_limit(k, 5, pc, async ({ id, data }) => {
+		if (!link_classify(data, strong_classify_links_helper)) {
+			return
+		}
+
+		do {
+			
+		}
+
+		// set to 'unknown', link.classify.* will find these
+
+		db.update(schema.links)
+			.set({ data: classified.data })
+			.where(sql`id = ${id}`)
+			.run()
+		updated++
+	})
+} */

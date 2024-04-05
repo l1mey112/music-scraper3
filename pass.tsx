@@ -7,7 +7,7 @@ import * as schema from './schema'
 import { db } from "./db"
 
 import { pass_youtube_channel_extrapolate_from_channel_id, pass_youtube_channel_meta_youtube_channel, pass_youtube_video_meta_youtube_video } from "./passes/youtube"
-import { pass_links_classify_strong, pass_links_classify_weak } from "./passes/links"
+import { pass_all_extrapolate_from_links, pass_links_classify_strong, pass_links_classify_weak } from "./passes/links"
 import { pass_images_download_images } from "./passes/images"
 
 const passes: PassBlock[] = [
@@ -16,6 +16,7 @@ const passes: PassBlock[] = [
 	{ name: 'youtube_channel.meta.youtube_channel', fn: pass_youtube_channel_meta_youtube_channel },
 	{ name: 'links.classify.weak', fn: pass_links_classify_weak },
 	{ name: 'links.classify.strong', fn: pass_links_classify_strong },
+	{ name: 'all.extrapolate.from_links', fn: pass_all_extrapolate_from_links },
 	{ name: 'images.download.images', fn: pass_images_download_images },
 ]
 
@@ -44,7 +45,7 @@ enum PassStateEnum {
 	Stopped,
 }
 
-type PassField = 'track' | 'album' | 'artist' | 'youtube_video' | 'youtube_channel' | 'links' | 'images'
+type PassField = 'all' | 'track' | 'album' | 'artist' | 'youtube_video' | 'youtube_channel' | 'links' | 'images'
 type PassKind = 'meta' | 'extrapolate' | 'download' | 'classify'
 type PassIdentifier = `${PassField}.${PassKind}.${string}`
 
