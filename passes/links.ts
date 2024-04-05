@@ -4,8 +4,9 @@ import { db } from "../db"
 import { sql } from "drizzle-orm"
 import { run_with_concurrency_limit } from "../pass"
 import { ProgressRef } from "../server"
-import { meta_youtube_handle_to_id } from "./youtube"
+import { meta_youtube_handle_to_id, youtube_channel_exists, youtube_video_exists } from "./youtube"
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
+import { db_backoff_sql, db_register_backoff } from "../misc"
 
 // matches ...99a7_q9XuZY）←｜→次作：（しばしまたれよ）
 //                       ^^^^^^^^^^^^^^^^^^^^^^^^^ very incorrect
@@ -13,9 +14,9 @@ import { SQLiteTable } from "drizzle-orm/sqlite-core"
 // vscode uses a state machine to identify links, it also includes this code for characters that the URL cannot end in
 //
 // https://github.com/microsoft/vscode/blob/d6eba9b861e3ab7d1935cff61c3943e319f5c830/src/vs/editor/common/languages/linkComputer.ts#L152
-// const CANNOT_END_IN = ' \t<>\'\"、。｡､，．：；‘〈「『〔（［｛｢｣｝］）〕』」〉’｀～…' + '.,;:'
+// const CANNOT_END_IN = ' \t<>\'\"、。｡､，．：；‘〈「『〔（［｛｢｣｝］）〕』」〉’｀～….,;:'
 //
-const url_regex = /(?:(?:(?:https?|ftp):)?\/\/)(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z0-9\u00a1-\uffff][a-z0-9\u00a1-\uffff-]{0,62})?[a-z0-9\u00a1-\uffff]\.)+(?:[a-z\u00a1-\uffff]{2,}\.?))(?::\d{2,5})?(?:[/?#][^\r\n \t<>'"、。｡､，．：；‘〈「『〔（［｛｢｣｝］）〕』」〉’｀～….,;:]*)?/ig
+const url_regex = /(?:(?:(?:https?|ftp):)?\/\/)(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z0-9\u00a1-\uffff][a-z0-9\u00a1-\uffff-]{0,62})?[a-z0-9\u00a1-\uffff]\.)+(?:[a-z\u00a1-\uffff]{2,}\.?))(?::\d{2,5})?(?:[/?#][^\r\n \t<>'"、。｡､，．：；‘〈「『〔（［｛｢｣｝］）〕』」〉’｀～…\.,;:]*)?/ig
 
 export function links_from_text(text: string): Set<string> {
 	const url_set = new Set<string>()
@@ -38,7 +39,7 @@ type Link =
 	| { kind: 'spotify_album_id',     data: string } // open.spotify.com/album/{}
 	| { kind: 'apple_album_id',       data: string } // music.apple.com/_/album/_/{} + music.apple.com/_/album/{}
 	| { kind: 'piapro_item_id',       data: string } // piapro.jp/t/{}
-	| { kind: 'piapro_creator_id',    data: string } // piapro.jp/{} + piapro.jp/my_page/?view=content&pid={}
+	| { kind: 'piapro_creator',       data: string } // piapro.jp/{} + piapro.jp/my_page/?view=content&pid={}
 	| { kind: 'niconico_video_id',    data: string } // www.nicovideo.jp/watch/{}
 	| { kind: 'niconico_user_id',     data: string } // www.nicovideo.jp/user/{}
 	| { kind: 'niconico_material_id', data: string } // commons.nicovideo.jp/material/{}
@@ -99,11 +100,11 @@ type WeakClassifyLinks = Record<Exclude<Link["kind"], "unknown">, LinkMatch[]>
 const weak_classify_links: WeakClassifyLinks = {
 	'youtube_video_id': [
 		{ domain: 'youtube.com', r: /\/watch/, m: ['v'] },
-		{ domain: 'youtube.com', r: /\/(?:v|embed|shorts|video|watch|live)\/([\S^\/]+)/ },
-		{ domain: 'youtu.be',    r: /\/([\S^\/]+)/ },
+		{ domain: 'youtube.com', r: /\/(?:v|embed|shorts|video|watch|live)\/([^\/]+)/ },
+		{ domain: 'youtu.be',    r: /\/([^\/]+)/ },
 	],
 	'youtube_channel_id': [
-		{ domain: 'youtube.com', r: /\/channel\/([\S^\/]+)/ },
+		{ domain: 'youtube.com', r: /\/channel\/([^\/]+)/ },
 		// @handles require touching the network, not handled here
 	],
 	'youtube_playlist_id': [
@@ -111,43 +112,43 @@ const weak_classify_links: WeakClassifyLinks = {
 		{ subdomain: 'music', domain: 'youtube.com', r: /\/playlist/, m: ['list'] },
 	],
 	'spotify_track_id': [
-		{ subdomain: 'open', domain: 'spotify.com', r: /\/track\/([\S^\/]+)/ },
+		{ subdomain: 'open', domain: 'spotify.com', r: /\/track\/([^\/]+)/ },
 	],
 	'spotify_artist_id': [
-		{ subdomain: 'open', domain: 'spotify.com', r: /\/artist\/([\S^\/]+)/ },
+		{ subdomain: 'open', domain: 'spotify.com', r: /\/artist\/([^\/]+)/ },
 	],
 	'spotify_album_id': [
-		{ subdomain: 'open', domain: 'spotify.com', r: /\/album\/([\S^\/]+)/ },
+		{ subdomain: 'open', domain: 'spotify.com', r: /\/album\/([^\/]+)/ },
 	],
 	'apple_album_id': [
-		{ subdomain: 'music', domain: 'apple.com', r: /\/\w+\/album\/[\S^\/]+\/([\S^\/]+)/ },
-		{ subdomain: 'music', domain: 'apple.com', r: /\/\w+\/album\/([\S^\/]+)/ },
+		{ subdomain: 'music', domain: 'apple.com', r: /\/\w+\/album\/[\S^\/]+\/([^\/]+)/ },
+		{ subdomain: 'music', domain: 'apple.com', r: /\/\w+\/album\/([^\/]+)/ },
 	],
 	'piapro_item_id': [
-		{ domain: 'piapro.jp', r: /\/t\/([\S^\/]+)/ },
+		{ domain: 'piapro.jp', r: /\/t\/([^\/]+)/ },
 	],
 	'piapro_creator_id': [
 		{ domain: 'piapro.jp', r: /\/my_page/, m: ['pid'] },
-		{ domain: 'piapro.jp', r: /\/([\S^\/]+)/ },
+		{ domain: 'piapro.jp', r: /\/([^\/]+)/ },
 	],
 	'niconico_video_id': [
-		{ domain: 'nicovideo.jp', r: /\/watch\/([\S^\/]+)/ },
+		{ domain: 'nicovideo.jp', r: /\/watch\/([^\/]+)/ },
 	],
 	'niconico_user_id': [
-		{ domain: 'nicovideo.jp', r: /\/user\/([\S^\/]+)/ },
+		{ domain: 'nicovideo.jp', r: /\/user\/([^\/]+)/ },
 	],
 	'niconico_material_id': [
-		{ subdomain: 'commons', domain: 'nicovideo.jp', r: /\/material\/([\S^\/]+)/ },
+		{ subdomain: 'commons', domain: 'nicovideo.jp', r: /\/material\/([^\/]+)/ },
 	],
 	'twitter_id': [
-		{ domain: 'twitter.com', r: /\/([\S^\/]+)/ },
-		{ domain: 'x.com', r: /\/([\S^\/]+)/ },
+		{ domain: 'twitter.com', r: /\/([^\/]+)/ },
+		{ domain: 'x.com', r: /\/([^\/]+)/ },
 	],
 	'karent_album_id': [
-		{ domain: 'karent.jp', r: /\/album\/([\S^\/]+)/ },
+		{ domain: 'karent.jp', r: /\/album\/([^\/]+)/ },
 	],
 	'karent_artist_id': [
-		{ domain: 'karent.jp', r: /\/artist\/([\S^\/]+)/ },
+		{ domain: 'karent.jp', r: /\/artist\/([^\/]+)/ },
 	],
 }
 
@@ -244,10 +245,15 @@ export function pass_links_classify_weak() {
 	return updated > 0
 }
 
+// https://www.youtube.com/c/r3musicboxenglish/playlists
+//                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+//                        these links exist, ignore the bottom part
+//                        they seem like legacy links, because those don't line up to a proper handle
+
 const strong_classify_links_helper: ClassifyBlock = {
 	'youtube_channel_handle': [
-		{ domain: 'youtube.com', r: /\/@([\S^\/]+)/ },
-		{ domain: 'youtube.com', r: /\/c\/([\S^\/]+)/ },
+		{ domain: 'youtube.com', r: /\/@([^\/]+)/ },
+		{ domain: 'youtube.com', r: /\/c\/([^\/]+)/ },
 	],
 }
 
@@ -256,7 +262,7 @@ export async function pass_links_classify_strong() {
 	let updated = 0
 	const k = db.select({ id: schema.links.id, data: schema.links.data })
 		.from(schema.links)
-		.where(sql`kind = 'unknown'`)
+		.where(sql`kind = 'unknown' and ${db_backoff_sql(schema.links, schema.links.id, 'links.classify.strong')}`)
 		.all()
 
 	const pc = new ProgressRef('links.classify.strong')
@@ -269,7 +275,15 @@ export async function pass_links_classify_strong() {
 
 		switch (classified.kind) {
 			case 'youtube_channel_handle': {
+				if (!classified.data.startsWith('@')) {
+					classified.data = '@' + classified.data
+				}
+
 				const channel_id = await meta_youtube_handle_to_id(classified.data)
+				if (!channel_id) {
+					db_register_backoff(schema.links, id, 'links.classify.strong')
+					return
+				}
 				classified.data = channel_id
 				classified.kind = 'youtube_channel_id'
 				break
@@ -292,42 +306,67 @@ export async function pass_links_classify_strong() {
 }
 
 // all.extrapolate.from_links
-export function pass_all_extrapolate_from_links() {
+export async function pass_all_extrapolate_from_links() {
 	// select from links where those identifiers don't show up in the tabls
 
-	const k = db.select({ ident: schema.links.data, kind: schema.links.kind })
+	let updated = false
+	const pc = new ProgressRef('all.extrapolate.from_links')
+
+	const youtube_videos = db.select({ id: schema.links.id, data: schema.links.data })
 		.from(schema.links)
-		.leftJoin(schema.youtube_video,   sql`substr(${schema.links.ident}, 2) = 'yv' and substr(${schema.links.ident}, 3) = ${schema.youtube_video.id}`)
-		.leftJoin(schema.youtube_channel, sql`substr(${schema.links.ident}, 2) = 'yc' and substr(${schema.links.ident}, 3) = ${schema.youtube_channel.id}`)
-		.where(sql`(${schema.links.kind} = 'youtube_video_id' or ${schema.links.kind} = 'youtube_channel_id') and (${schema.youtube_video.id} is null and ${schema.youtube_channel.id} is null)`)
+		.leftJoin(schema.youtube_video, sql`substr(${schema.links.ident}, 3) = ${schema.youtube_video.id}`)
+		.where(sql`${schema.links.kind} = 'youtube_video_id' and substr(${schema.links.ident}, 2) = 'yv' and ${schema.youtube_video.id} is null and 
+			${db_backoff_sql(schema.links, schema.links.id, 'all.extrapolate.from_links')}
+		`)
 		.all()
 
-	const table_map = new Map<SQLiteTable, string[]>()
-	const upsert = (table: SQLiteTable, ident: string) => {
-		if (table_map.has(table)) {
-			table_map.get(table)!.push(ident)
+	const youtube_channels = db.select({ id: schema.links.id, data: schema.links.data })
+		.from(schema.links)
+		.innerJoin(schema.youtube_channel, sql`substr(${schema.links.ident}, 3) = ${schema.youtube_channel.id}`)
+		.where(sql`${schema.links.kind} = 'youtube_channel_id' and substr(${schema.links.ident}, 2) = 'yc' and ${schema.youtube_channel.id} is null and
+			${db_backoff_sql(schema.links, schema.links.id, 'all.extrapolate.from_links')}
+		`)
+		.all()
+
+	// can't use sets to prune data since we need to preserve ids to attach backoff
+	// also can't use sets because there is no value equality for objects
+
+	// using delete on an array and introducing holes isn't actually that bad
+	// ill need holes to preserve the index
+
+	await run_with_concurrency_limit(Array.from(youtube_videos.entries()), 5, pc, async ([idx, { id, data }]) => {
+		if (!await youtube_video_exists(data)) {
+			db_register_backoff(schema.links, id, 'all.extrapolate.from_links')
+			delete youtube_videos[idx]
 		} else {
-			table_map.set(table, [ident])
+			updated = true
 		}
-	}
+	})
 
-	for (const { ident, kind } of k) {
-		switch (kind) {
-			case 'youtube_video_id':   upsert(schema.youtube_video, ident); break
-			case 'youtube_channel_id': upsert(schema.youtube_channel, ident); break
+	await run_with_concurrency_limit(Array.from(youtube_channels.entries()), 5, pc, async ([idx, { id, data }]) => {
+		if (!await youtube_channel_exists(data)) {
+			db_register_backoff(schema.links, id, 'all.extrapolate.from_links')
+			delete youtube_channels[idx]
+		} else {
+			updated = true
 		}
+	})
+
+	if (youtube_videos.length > 0) {
+		db.insert(schema.youtube_video)
+			.values(youtube_videos.filter(it => it).map(it => ({ id: it.data })))
+			.run()	
 	}
-
-	console.log(table_map)
-
-	for (const [schema, ident] of table_map) {
-		db.insert(schema)
-			.values(ident.map(it => ({ id: it }))) // () => { id: it } -> this is a fucking label with a hanging expression
-			.onConflictDoNothing()
+	
+	if (youtube_channels.length > 0) {
+		db.insert(schema.youtube_channel)
+			.values(youtube_channels.filter(it => it).map(it => ({ id: it.data })))
 			.run()
 	}
+	
+	pc.close()
 
-	return k.length > 0
+	return updated
 }
 
 // https://gist.github.com/HoangTuan110/e6eb412ed32657c841fcc2c12c156f9d
