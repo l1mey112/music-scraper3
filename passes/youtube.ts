@@ -6,6 +6,7 @@ import { ProgressRef } from "../server"
 import { db_links_append } from "./../misc"
 import { db_images_append_url } from "./images"
 import { ImageKind } from "../types"
+import { links_from_text } from "./links"
 
 function largest_image(arr: Iterable<YoutubeImage>): YoutubeImage | undefined {
 	let largest: YoutubeImage | undefined = undefined;
@@ -105,7 +106,6 @@ function youtube_id_from_url(video_url: string): string | undefined {
 
 // youtube_video.meta.youtube_video
 export async function pass_youtube_video_meta_youtube_video() {
-	const url_regex = /(?:(?:(?:https?|ftp):)?\/\/)(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z0-9\u00a1-\uffff][a-z0-9\u00a1-\uffff-]{0,62})?[a-z0-9\u00a1-\uffff]\.)+(?:[a-z\u00a1-\uffff]{2,}\.?))(?::\d{2,5})?(?:[/?#]\S*)?/ig
 
 	const k = db.select({ id: schema.youtube_video.id })
 		.from(schema.youtube_video)
@@ -120,7 +120,6 @@ export async function pass_youtube_video_meta_youtube_video() {
 
 	await run_with_concurrency_limit(k, 5, pc, async ({ id }) => {
 		const meta = await meta_youtube_video(id)
-		const url_set = new Set<string>()
 
 		// find largest thumbnail and save
 		const thumb = largest_image(Object.values(meta.thumbnails))
@@ -130,9 +129,7 @@ export async function pass_youtube_video_meta_youtube_video() {
 		}
 
 		// extract all URLs from the description
-		for (const url of meta.description.matchAll(url_regex)) {
-			url_set.add(url[0])
-		}
+		const url_set = links_from_text(meta.description)
 
 		db.update(schema.youtube_video)
 			.set({
@@ -224,7 +221,7 @@ export async function pass_youtube_channel_meta_youtube_channel() {
 			.run()
 
 		const links = channel.about.links.map(({ url }) => url)
-		db_links_append(schema.youtube_video, id, links)
+		db_links_append(schema.youtube_channel, id, links)
 	})
 
 	pc.close()

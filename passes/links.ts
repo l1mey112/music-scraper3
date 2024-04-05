@@ -6,6 +6,26 @@ import { run_with_concurrency_limit } from "../pass"
 import { ProgressRef } from "../server"
 import { meta_youtube_handle_to_id } from "./youtube"
 
+// matches ...99a7_q9XuZY）←｜→次作：（しばしまたれよ）
+//                       ^^^^^^^^^^^^^^^^^^^^^^^^^ very incorrect
+//
+// vscode uses a state machine to identify links, it also includes this code for characters that the URL cannot end in
+//
+// https://github.com/microsoft/vscode/blob/d6eba9b861e3ab7d1935cff61c3943e319f5c830/src/vs/editor/common/languages/linkComputer.ts#L152
+// const CANNOT_END_IN = ' \t<>\'\"、。｡､，．：；‘〈「『〔（［｛｢｣｝］）〕』」〉’｀～…' + '.,;:'
+//
+const url_regex = /(?:(?:(?:https?|ftp):)?\/\/)(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z0-9\u00a1-\uffff][a-z0-9\u00a1-\uffff-]{0,62})?[a-z0-9\u00a1-\uffff]\.)+(?:[a-z\u00a1-\uffff]{2,}\.?))(?::\d{2,5})?(?:[/?#][^\r\n \t<>'"、。｡､，．：；‘〈「『〔（［｛｢｣｝］）〕』」〉’｀～….,;:]*)?/ig
+
+export function links_from_text(text: string): Set<string> {
+	const url_set = new Set<string>()
+
+	for (const url of text.matchAll(url_regex)) {
+		url_set.add(url[0])
+	}
+	
+	return url_set
+}
+
 type strin2 = `${string}/${string}`
 
 type Link =
