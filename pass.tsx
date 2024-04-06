@@ -255,36 +255,3 @@ export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit:
 	// wait for all active operations to complete
 	await Promise.all(active_promises)
 }
-
-/* const WYHASH_SEED = 761864364875522238n
-
-export function pass_backoff_register(id: number, column: SQLiteColumn, name: PassIdentifier) {
-	const hash = Bun.hash.wyhash(name, WYHASH_SEED)
-	let idstr
-
-	switch (column) {
-		default: {
-			throw new Error(`unknown column reference`)
-		}
-	}
-
-	db.insert(schema.pass_backoff)
-		.values({ ident: idstr, utc: Date.now(), pass: hash })
-		.run()
-}
-
-// track_id -> "t"
-export function pass_backoff_sql(column: SQLiteColumn, name: PassIdentifier) {
-	const hash = Bun.hash.wyhash(name, WYHASH_SEED)
-	let idstr
-
-	switch (column) {
-		default: {
-			throw new Error(`unknown column reference`)
-		}
-	}
-
-	return sql`(${idstr} || ${column}) not exists (
-		select ident from pass_backoff where pass = ${name}
-	)`
-} */

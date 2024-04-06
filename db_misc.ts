@@ -31,6 +31,17 @@ export function db_fs_sharded_path(dot_ext: string): [string, FSHash] {
 	return [`${media_db}/${shard}/${hash}`, hash]
 }
 
+// append your own extension
+// creates the shard folder
+export function db_fs_sharded_path_noext_nonlazy(): [string, string] {
+	const hash = nanoid() as FSHash
+	const shard = hash.slice(0, 2)
+
+	mkdirSync(`${media_db}/${shard}`, { recursive: true })
+
+	return [`${media_db}/${shard}/${hash}`, hash]
+}
+
 export function db_links_append(pk: SQLiteTable, pk_id: string | number, urls: string[]) {
 	if (urls.length === 0) {
 		return

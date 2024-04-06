@@ -15,6 +15,7 @@
     "@spotify/web-api-ts-sdk": "^1.2.0",
     "drizzle-orm": "^0.30.6",
     "tldts": "^6.1.14",
+    "yt-dlp-wrap": "^2.3.12",
     "ytmusic-api": "^5.2.1"
   }
 }
