@@ -60,6 +60,13 @@ export const links = sqliteTable('links', {
 
 // `url` is the backoff PK
 
+// sources don't have `kind` or `url`, possibly deprecate `url` in images
+// though it's useful for batching in another pass since one single article
+// can have a LOT of images (> 5 possibly)
+//
+// making `hash` non null would allow a proper PK and no row id table
+// please look into this.
+
 // relies on rowid
 export const images = sqliteTable('images', {
 	hash: text('hash').$type<FSHash>(),
@@ -74,27 +81,21 @@ export const images = sqliteTable('images', {
 	pidx: index("images.ident_idx").on(t.ident),
 }))
 
-// sources don't have `kind` or `url`, possibly deprecate `url` in images
-// though it's useful for batching in another pass since one single article
-// can have a LOT of images (> 5 possibly)
-//
-// making `hash` non null would allow a proper PK and no row id table
-// please look into this.
-
-// 120 second bound analysis
+// `width` and `height` are optional, they are only present in video sources
 
 // chromaprint is a 32-bit integer array, usually bounded by 120 seconds or less
 // this doesn't represent the entire length of the audio
 // one second is ~7.8 uint32s
-
-// `width` and `height` are optional, they are only present in video sources
+//
+// compression of a chromaprint is a BAD idea, the entropy is already way too high
+// i tried, you'll save 100 bytes in 4000, not worth it
 
 // a source is a video/audio file, always containing some form of audio
 // WITHOUT-ROWID: sources
 export const sources = sqliteTable('sources', {
 	hash: text('hash').primaryKey().$type<FSHash>(),
 	ident: text('ident').$type<PIdent>().notNull(),
-	chromaprint: blob('chromaprint'),
+	chromaprint: blob('chromaprint').$type<Uint8Array>(),
 	width: integer('width'),
 	height: integer('height'),
 }, (t) => ({

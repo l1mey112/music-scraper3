@@ -1,5 +1,5 @@
 import { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
-import { FSHash, LiteralHash, PassIdentifier } from "./types"
+import { FSHash, PassIdentifier } from "./types"
 import { BunFile } from "bun";
 import { nanoid } from "./nanoid";
 import { resolve } from "path";
@@ -16,6 +16,11 @@ if (!existsSync(media_db)) {
 } else if (!statSync(media_db).isDirectory()) {
 	console.error(`media directory exists but is not a directory (at ${media_db})`)
 	process.exit(1)
+}
+
+export function db_fs_hash_path(hash: FSHash): string {
+	const shard = (hash as unknown as string).slice(0, 2)
+	return `${media_db}/${shard}/${hash}`
 }
 
 export function db_fs_sharded_lazy_bunfile(dot_ext: string): [BunFile, FSHash] {
