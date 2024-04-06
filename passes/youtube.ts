@@ -8,6 +8,25 @@ import { db_images_append_url } from "./images"
 import { ImageKind } from "../types"
 import { links_from_text } from "./links"
 
+export async function youtube_video_exists(id: string): Promise<boolean> {
+	const req = await fetch(`https://www.youtube.com/oembed?format=json&url=https://www.youtube.com/watch?v=${id}`)
+	return req.status === 200
+}
+
+export async function youtube_channel_exists(id: string): Promise<boolean> {
+	// no oembed test, need to request the channel
+
+	const resp = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${default_key}&id=${id}`, {
+		headers: {
+			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
+			"Referer": "https://mattw.io/",
+		}
+	})
+	const json = await resp.json() as any
+
+	return json.pageInfo.totalResults > 0
+}
+
 function largest_image(arr: Iterable<YoutubeImage>): YoutubeImage | undefined {
 	let largest: YoutubeImage | undefined = undefined;
 
@@ -25,8 +44,17 @@ const default_key = atob('QUl6YVN5QVNUTVFjay1qdHRGOHF5OXJ0RW50MUh5RVl3NUFtaEU4')
 
 // much slower, but we need the URLs
 async function meta_youtube_channel(channel_id: string): Promise<YoutubeChannel> {
-	const resp = await fetch(`https://yt.lemnoslife.com/channels?part=snippet,about&id=${channel_id}`)
+	const resp = await fetch(`https://yt4.lemnoslife.com/channels?part=snippet,about&id=${channel_id}`)
+	if (!resp.ok) {
+		throw new Error(`youtube channel req failed (id: ${channel_id})`)
+	}
 	const json = await resp.json() as any
+	if (json.error?.message) {
+		throw new Error(`youtube channel req failed (id: ${channel_id}): ${json.error.message}`)
+	}
+	if (json.items.length === 0) {
+		throw new Error(`youtube channel req is empty (id: ${channel_id})`)
+	}
 	const inner = json.items[0]
 
 	// trim the fat
@@ -38,7 +66,7 @@ async function meta_youtube_channel(channel_id: string): Promise<YoutubeChannel>
 	// lemnoslife doesn't provide display name
 	// youtube v3 doesn't provide links
 
-	//https://yt.lemnoslife.com/noKey/channels?part=snippet&id=
+	//https://yt4.lemnoslife.com/noKey/channels?part=snippet&id=
 	const yt_resp = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${default_key}&part=snippet&id=${channel_id}`, {
 		headers: {
 			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
@@ -60,7 +88,7 @@ async function meta_youtube_channel(channel_id: string): Promise<YoutubeChannel>
 // magnitudes faster
 async function meta_youtube_video(video_id: string): Promise<YoutubeVideo> {
 	// their API is sloooowww
-	//const resp = await fetch(`https://yt.lemnoslife.com/noKey/videos?id=${video_id}&part=snippet`, {
+	//const resp = await fetch(`https://yt4.lemnoslife.com/noKey/videos?id=${video_id}&part=snippet`, {
 	const resp = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${default_key}&id=${video_id}&part=snippet`, {
 		headers: {
 			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
@@ -69,7 +97,10 @@ async function meta_youtube_video(video_id: string): Promise<YoutubeVideo> {
 	})
 
 	const json = await resp.json() as any
-	if (json.items.length === 0) {
+	if (!resp.ok) {
+		throw new Error(`youtube video req failed (id: ${video_id})`)
+	}
+	if (json.pageInfo.totalResults === 0) {
 		throw new Error(`youtube video req is empty (id: ${video_id})`)
 	}
 
@@ -77,8 +108,12 @@ async function meta_youtube_video(video_id: string): Promise<YoutubeVideo> {
 	return inner.snippet
 }
 
-export async function meta_youtube_handle_to_id(handle: string): Promise<string> {
-	// could fetch `https://yt.lemnoslife.com/channels?handle=@HANDLE` but that is slower than youtube v3
+export async function meta_youtube_handle_to_id(handle: string): Promise<string | undefined> {
+	if (!handle.startsWith('@')) {
+		throw new Error(`youtube handle must start with @ (idL: ${handle})`)
+	}
+
+	// could fetch `https://yt4.lemnoslife.com/channels?handle=@HANDLE` but that is slower than youtube v3
 	const resp = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${default_key}&forHandle=${handle}&part=snippet`, {
 		headers: {
 			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
@@ -87,8 +122,8 @@ export async function meta_youtube_handle_to_id(handle: string): Promise<string>
 	})
 
 	const json: any = await resp.json()
-	if (json.items.length === 0) {
-		throw new Error(`youtube handle req is empty (id: ${handle})`)
+	if (json.pageInfo.totalResults === 0) {
+		return undefined
 	}
 
 	return json.items[0].id
@@ -212,6 +247,10 @@ export async function pass_youtube_channel_meta_youtube_channel() {
 
 		for (const [key, kind] of Object.entries(img_map)) {
 			const images = channel.images[key as ChannelKey]
+			if (!images) {
+				continue
+			}
+
 			const thumb = largest_image(images)
 
 			if (thumb) {
@@ -269,10 +308,10 @@ type YoutubeChannelAbout = {
 }
 
 type YoutubeChannelSnippet = {
-	avatar: YoutubeImage[]
-	banner: YoutubeImage[]
-	tvBanner: YoutubeImage[]
-	mobileBanner: YoutubeImage[]
+	avatar: YoutubeImage[] | null
+	banner: YoutubeImage[] | null
+	tvBanner: YoutubeImage[] | null
+	mobileBanner: YoutubeImage[] | null
 }
 
 type YoutubeChannel = {

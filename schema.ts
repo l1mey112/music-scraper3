@@ -40,6 +40,8 @@ export const thirdparty_store = sqliteTable('thirdparty:store', {
 	data: text('data', { mode: 'json' }).notNull(),
 })
 
+// `id` is the backoff PK
+
 export const links = sqliteTable('links', {
 	id: integer('id').primaryKey(),
 	derived_from: integer('derived_from'), // foreign key to links.id
@@ -56,8 +58,7 @@ export const links = sqliteTable('links', {
 // url      |  o   |  o
 // null url |  o   |  x
 
-// TODO: WITHOUT ROWID tables can't have nulls in the PKs?
-//       this might throw badly
+// `url` is the backoff PK
 
 // imageFS is lazy, relies on rowid
 export const images = sqliteTable('images', {

@@ -2,7 +2,7 @@ import { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { ImageKind } from "../types";
 import * as schema from '../schema'
 import { db } from "../db";
-import { db_fs_sharded_lazy_bunfile, db_ident_pk } from "../misc";
+import { db_backoff_sql, db_fs_sharded_lazy_bunfile, db_ident_pk, db_register_backoff } from "../misc";
 import { sql } from "drizzle-orm";
 import { run_with_concurrency_limit } from "../pass";
 import { ProgressRef } from "../server";
@@ -25,7 +25,7 @@ export function db_images_append_url(pk: SQLiteTable, pk_id: string | number, ki
 export async function pass_images_download_images() {
 	const urls = db.select({ rowid: sql<number>`rowid`, url: sql<string>`url` })
 		.from(schema.images)
-		.where(sql`hash is null and url is not null`)
+		.where(sql`hash is null and url is not null and ${db_backoff_sql(schema.images, schema.images.url, 'images.download.images')}`)
 		.all()
 
 	const pc = new ProgressRef('images.download.images')
@@ -38,8 +38,8 @@ export async function pass_images_download_images() {
 		})
 
 		if (!resp.ok) {
-			//register_backoff_album(entry.id, 'album.media.cover_art_small_spotify')
-			throw new Error(`req failed TODO: ensure backoff`)
+			db_register_backoff(schema.images, url, 'images.download.images')
+			return
 		}
 
 		const ext = mime_ext(resp.headers.get("content-type"))

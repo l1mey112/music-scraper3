@@ -47,7 +47,7 @@ enum PassStateEnum {
 
 type PassField = 'all' | 'track' | 'album' | 'artist' | 'youtube_video' | 'youtube_channel' | 'links' | 'images'
 type PassKind = 'meta' | 'extrapolate' | 'download' | 'classify'
-type PassIdentifier = `${PassField}.${PassKind}.${string}`
+export type PassIdentifier = `${PassField}.${PassKind}.${string}`
 
 type PassBlock = {
 	name: PassIdentifier // split('.', 3)
@@ -172,10 +172,11 @@ function pass_tostring() {
 						<input checked={pass_state.single_step} hx-trigger="click" hx-swap="none" hx-post={`/ui/pass_toggle_st`} type="checkbox" name="state" id="pass-table-st" />
 						<label class="tooltip" data-tooltip title="single step execution" for="pass-table-st" />
 					</td>
-					<td colspan={2}>
+					<td>
 						<button hx-post="/ui/pass_run" hx-swap="none" hx-trigger="click">Run</button>
 						<button hx-post="/ui/pass_stop" hx-swap="none" hx-trigger="click">Stop</button>
 					</td>
+					<td class={pass_state.mutations.size > 0 ? 'table-running' : ''}>()</td>
 				</tr>
 			</tfoot>
 		</table>
