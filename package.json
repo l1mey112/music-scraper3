@@ -14,6 +14,7 @@
     "@kitajs/ts-html-plugin": "^4.0.0-next.3",
     "@spotify/web-api-ts-sdk": "^1.2.0",
     "drizzle-orm": "^0.30.6",
-    "tldts": "^6.1.14"
+    "tldts": "^6.1.14",
+    "ytmusic-api": "^5.2.1"
   }
 }

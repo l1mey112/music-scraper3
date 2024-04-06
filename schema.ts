@@ -1,4 +1,4 @@
-import { index, sqliteTable, text, integer, SQLiteTable, unique } from "drizzle-orm/sqlite-core";
+import { index, sqliteTable, text, integer, unique, blob } from "drizzle-orm/sqlite-core";
 import { LiteralHash, ImageKind, PIdent, YoutubeChannelId, YoutubeVideoId, FSHash } from "./types";
 
 // .references(() => youtube_channel.id),
@@ -60,7 +60,7 @@ export const links = sqliteTable('links', {
 
 // `url` is the backoff PK
 
-// imageFS is lazy, relies on rowid
+// relies on rowid
 export const images = sqliteTable('images', {
 	hash: text('hash').$type<FSHash>(),
 	url: text('url'),
@@ -72,4 +72,31 @@ export const images = sqliteTable('images', {
 	pkidx0: index("images.pkidx0").on(t.hash), // ????
 	pkidx1: index("images.pkidx1").on(t.url),  // ????
 	pidx: index("images.ident_idx").on(t.ident),
+}))
+
+// sources don't have `kind` or `url`, possibly deprecate `url` in images
+// though it's useful for batching in another pass since one single article
+// can have a LOT of images (> 5 possibly)
+//
+// making `hash` non null would allow a proper PK and no row id table
+// please look into this.
+
+// 120 second bound analysis
+
+// chromaprint is a 32-bit integer array, usually bounded by 120 seconds or less
+// this doesn't represent the entire length of the audio
+// one second is ~7.8 uint32s
+
+// `width` and `height` are optional, they are only present in video sources
+
+// a source is a video/audio file, always containing some form of audio
+// WITHOUT-ROWID: sources
+export const sources = sqliteTable('sources', {
+	hash: text('hash').primaryKey().$type<FSHash>(),
+	ident: text('ident').$type<PIdent>().notNull(),
+	chromaprint: blob('chromaprint'),
+	width: integer('width'),
+	height: integer('height'),
+}, (t) => ({
+	pidx: index("sources.ident_idx").on(t.ident),
 }))

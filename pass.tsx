@@ -9,6 +9,7 @@ import { db } from "./db"
 import { pass_youtube_channel_extrapolate_from_channel_id, pass_youtube_channel_meta_youtube_channel, pass_youtube_video_meta_youtube_video } from "./passes/youtube"
 import { pass_all_extrapolate_from_links, pass_links_classify_link_shorteners, pass_links_classify_strong, pass_links_classify_weak } from "./passes/links"
 import { pass_images_download_images } from "./passes/images"
+import { pass_sources_download_from_youtube_video } from "./passes/youtube_download"
 
 const passes: PassBlock[] = [
 	{ name: 'youtube_video.meta.youtube_video', fn: pass_youtube_video_meta_youtube_video },
@@ -17,8 +18,9 @@ const passes: PassBlock[] = [
 	{ name: 'links.classify.link_shorteners', fn: pass_links_classify_link_shorteners },
 	{ name: 'links.classify.weak', fn: pass_links_classify_weak },
 	{ name: 'links.classify.strong', fn: pass_links_classify_strong },
-	{ name: 'all.extrapolate.from_links', fn: pass_all_extrapolate_from_links },
+	// { name: 'all.extrapolate.from_links', fn: pass_all_extrapolate_from_links },
 	{ name: 'images.download.images', fn: pass_images_download_images },
+	{ name: 'sources.download.from_youtube_video', fn: pass_sources_download_from_youtube_video },
 ]
 
 const TRIP_COUNT_MAX = 10
