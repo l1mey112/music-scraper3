@@ -1,33 +1,13 @@
 import { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
-import { FSHash, LiteralHash } from "./types"
+import { FSHash, LiteralHash, PassIdentifier } from "./types"
 import { BunFile } from "bun";
 import { nanoid } from "./nanoid";
 import { resolve } from "path";
 import { existsSync, mkdirSync, statSync } from "fs";
 import * as schema from './schema'
-import { db } from './db';
-import { PassIdentifier } from './pass';
+import { db, db_hash, db_ident_pk } from './db';
 import { SQL, sql } from 'drizzle-orm';
 import { emit_log } from './server';
-
-const WYHASH_SEED = 761864364875522238n
-
-export function db_hash(s: string): LiteralHash {
-	return Bun.hash.wyhash(s, WYHASH_SEED) as LiteralHash
-}
-
-// ensure lengths are 3
-export function db_ident_pk(table: SQLiteTable) {
-	switch (table) {
-		case schema.youtube_video:   return 'yv/'
-		case schema.youtube_channel: return 'yc/'
-		case schema.images:          return 'im/'
-		case schema.links:           return 'li/'
-		default: {
-			throw new Error(`unknown table ${table}`)
-		}
-	}
-}
 
 const media_db = resolve("db")
 

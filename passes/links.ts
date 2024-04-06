@@ -6,7 +6,7 @@ import { run_with_concurrency_limit } from "../pass"
 import { ProgressRef } from "../server"
 import { meta_youtube_handle_to_id, youtube_channel_exists, youtube_video_exists } from "./youtube"
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
-import { db_backoff_sql, db_register_backoff } from "../misc"
+import { db_backoff_sql, db_register_backoff } from "../db_misc"
 
 // matches ...99a7_q9XuZY）←｜→次作：（しばしまたれよ）
 //                       ^^^^^^^^^^^^^^^^^^^^^^^^^ very incorrect
@@ -209,7 +209,7 @@ function link_classify(url: string, classify_links: ClassifyBlock): { kind: stri
 				}
 			}
 
-			if ((!match.r || !match.m) && match_idents.length === 0) {
+			if ((match.r || match.m) && match_idents.length === 0) {
 				throw new Error('no match idents found - should never happen')
 			}
 
@@ -260,7 +260,7 @@ const strong_classify_links_helper: ClassifyBlock = {
 // links.classify.strong
 export async function pass_links_classify_strong() {
 	let updated = 0
-	const k = db.select({ id: schema.links.id, data: schema.links.data })
+	let k = db.select({ id: schema.links.id, data: schema.links.data })
 		.from(schema.links)
 		.where(sql`kind = 'unknown' and ${db_backoff_sql(schema.links, schema.links.id, 'links.classify.strong')}`)
 		.all()
@@ -312,23 +312,8 @@ export async function pass_all_extrapolate_from_links() {
 	let updated = false
 	const pc = new ProgressRef('all.extrapolate.from_links')
 
-	// substr() is 1 index based are you fucking retarding me
-	/* const youtube_videos = db.select({ id: schema.links.id, data: schema.links.data })
-		.from(schema.links)
-		.leftJoin(schema.youtube_video, sql`substr(${schema.links.ident}, 1, 2) = 'yv' and substr(${schema.links.ident}, 4) = ${schema.youtube_video.id}`)
-		.where(sql`${schema.links.kind} = 'youtube_video_id' and (${schema.youtube_video.id} is null) and 
-			${db_backoff_sql(schema.links, schema.links.id, 'all.extrapolate.from_links')}
-		`)
-		.all()
-	
-	const youtube_channels = db.select({ id: schema.links.id, data: schema.links.data })
-		.from(schema.links)
-		.leftJoin(schema.youtube_channel, sql`substr(${schema.links.ident}, 1, 2) = 'yc' and substr(${schema.links.ident}, 4) = ${schema.youtube_channel.id}`)
-		.where(sql`${schema.links.kind} = 'youtube_channel_id' and (${schema.youtube_channel.id} is null) and
-			${db_backoff_sql(schema.links, schema.links.id, 'all.extrapolate.from_links')}
-		`)
-		.all() */
-	
+	// substr() is 1 index based are you fucking kidding me
+
 	const youtube_videos = db.select({ id: schema.links.id, data: schema.links.data })
 		.from(schema.links)
 		.where(sql`${schema.links.kind} = 'youtube_video_id'
@@ -336,7 +321,7 @@ export async function pass_all_extrapolate_from_links() {
 			and ${schema.links.data} not in (select ${schema.youtube_video.id} from ${schema.youtube_video})
 		`)
 		.all()
-	
+
 	const youtube_channels = db.select({ id: schema.links.id, data: schema.links.data })
 		.from(schema.links)
 		.where(sql`${schema.links.kind} = 'youtube_channel_id'
@@ -344,18 +329,6 @@ export async function pass_all_extrapolate_from_links() {
 			and ${schema.links.data} not in (select ${schema.youtube_channel.id} from ${schema.youtube_channel})
 		`)
 		.all()
-	
-	/* const vk0 = db.select({ id: schema.links.id, data: schema.links.data })
-		.from(schema.links)
-		.where(sql`${schema.links.kind} = 'youtube_video_id' and ${db_backoff_sql(schema.links, schema.links.id, 'all.extrapolate.from_links')}`)
-		.all()
-	
-	const vk1 = db.select({ id: schema.youtube_video.id, data: schema.youtube_video.id })
-		.from(schema.youtube_video)
-		.all()
-
-	const youtube_video_ids = new Set(vk1.map(it => it.data))
-	const youtube_videos = vk0.filter(it => !youtube_video_ids.has(it.data)) */
 
 	// can't use sets to prune data since we need to preserve ids to attach backoff
 	// also can't use sets because there is no value equality for objects
@@ -413,30 +386,43 @@ const link_shorteners_classify: ClassifyBlock = {
 }
 
 // links.classify.link_shorteners
-/* export async function pass_links_classify_link_shorteners() {
+export async function pass_links_classify_link_shorteners() {
 	let updated = 0
-	const k = db.select({ id: schema.links.id, data: schema.links.data })
+	let k = db.select({ id: schema.links.id, data: schema.links.data })
 		.from(schema.links)
-		.where(sql`kind = 'unknown'`)
+		.where(sql`kind = 'unknown' and ${db_backoff_sql(schema.links, schema.links.id, 'links.classify.link_shorteners')}`)
 		.all()
+
+	// match only the ones that are in the list
+	k = k.filter(({ data }) => link_classify(data, link_shorteners_classify))
 
 	const pc = new ProgressRef('links.classify.link_shorteners')
 
 	await run_with_concurrency_limit(k, 5, pc, async ({ id, data }) => {
-		if (!link_classify(data, strong_classify_links_helper)) {
+		const req = await fetch(data, { method: 'HEAD' })
+
+		// even if it passes through the shortener
+		// 1. it might not be a valid link
+		// 2. the server might not support HEAD requests (though supporting GET just fine)
+		//    some servers return 404 on HEAD (200 for GET) but URL is intact
+
+		// no redirect
+		// most likely req.ok isn't true as well
+		if (req.url === data) {
+			db_register_backoff(schema.links, id, 'links.classify.link_shorteners')
 			return
 		}
 
-		do {
-			
-		}
-
-		// set to 'unknown', link.classify.* will find these
+		// just go ahead and insert it back in regardless
 
 		db.update(schema.links)
-			.set({ data: classified.data })
+			.set({ kind: 'unknown', data: req.url })
 			.where(sql`id = ${id}`)
 			.run()
 		updated++
 	})
-} */
+
+	pc.close()
+
+	return updated > 0
+}

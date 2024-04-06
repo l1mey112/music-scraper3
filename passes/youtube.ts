@@ -3,7 +3,7 @@ import { db } from "../db"
 import * as schema from '../schema'
 import { run_with_concurrency_limit } from "../pass"
 import { ProgressRef } from "../server"
-import { db_links_append } from "./../misc"
+import { db_links_append } from "./../db_misc"
 import { db_images_append_url } from "./images"
 import { ImageKind } from "../types"
 import { links_from_text } from "./links"

@@ -1,19 +1,20 @@
 import { SQLiteColumn } from "drizzle-orm/sqlite-core"
 import { CredentialKind } from "./cred"
 import { ProgressRef, component_invalidate, component_register, emit_log, route_register } from "./server"
-import { MaybePromise } from "./types"
+import { MaybePromise, PassIdentifier } from "./types"
 import { sql } from "drizzle-orm"
 import * as schema from './schema'
 import { db } from "./db"
 
 import { pass_youtube_channel_extrapolate_from_channel_id, pass_youtube_channel_meta_youtube_channel, pass_youtube_video_meta_youtube_video } from "./passes/youtube"
-import { pass_all_extrapolate_from_links, pass_links_classify_strong, pass_links_classify_weak } from "./passes/links"
+import { pass_all_extrapolate_from_links, pass_links_classify_link_shorteners, pass_links_classify_strong, pass_links_classify_weak } from "./passes/links"
 import { pass_images_download_images } from "./passes/images"
 
 const passes: PassBlock[] = [
 	{ name: 'youtube_video.meta.youtube_video', fn: pass_youtube_video_meta_youtube_video },
 	{ name: 'youtube_channel.extrapolate.from_channel_id', fn: pass_youtube_channel_extrapolate_from_channel_id },
 	{ name: 'youtube_channel.meta.youtube_channel', fn: pass_youtube_channel_meta_youtube_channel },
+	{ name: 'links.classify.link_shorteners', fn: pass_links_classify_link_shorteners },
 	{ name: 'links.classify.weak', fn: pass_links_classify_weak },
 	{ name: 'links.classify.strong', fn: pass_links_classify_strong },
 	{ name: 'all.extrapolate.from_links', fn: pass_all_extrapolate_from_links },
@@ -44,10 +45,6 @@ enum PassStateEnum {
 	PendingStop,
 	Stopped,
 }
-
-type PassField = 'all' | 'track' | 'album' | 'artist' | 'youtube_video' | 'youtube_channel' | 'links' | 'images'
-type PassKind = 'meta' | 'extrapolate' | 'download' | 'classify'
-export type PassIdentifier = `${PassField}.${PassKind}.${string}`
 
 type PassBlock = {
 	name: PassIdentifier // split('.', 3)
@@ -218,6 +215,10 @@ let pass_state: PassState = {
 }
 
 export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit: number, ref: ProgressRef | undefined, next: (v: T) => Promise<void>): Promise<void> {
+	if (arr.length == 0) {
+		return
+	}
+	
 	const active_promises: Promise<void>[] = []
 
 	if (ref) {

@@ -9,3 +9,7 @@ export type ImageKind = 'yt_thumbnail' | 'yt_avatar' | 'yt_banner' | 'yt_tv_bann
 
 export type LiteralHash = bigint & { readonly __tag: unique symbol }
 export type FSHash = string & { readonly __tag: unique symbol }
+
+type PassField = 'all' | 'track' | 'album' | 'artist' | 'youtube_video' | 'youtube_channel' | 'links' | 'images'
+type PassKind = 'meta' | 'extrapolate' | 'download' | 'classify'
+export type PassIdentifier = `${PassField}.${PassKind}.${string}`

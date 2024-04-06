@@ -1,8 +1,8 @@
 import { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { ImageKind } from "../types";
 import * as schema from '../schema'
-import { db } from "../db";
-import { db_backoff_sql, db_fs_sharded_lazy_bunfile, db_ident_pk, db_register_backoff } from "../misc";
+import { db, db_ident_pk } from "../db";
+import { db_backoff_sql, db_fs_sharded_lazy_bunfile, db_register_backoff } from "../db_misc";
 import { sql } from "drizzle-orm";
 import { run_with_concurrency_limit } from "../pass";
 import { ProgressRef } from "../server";
