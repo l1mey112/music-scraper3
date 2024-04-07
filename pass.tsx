@@ -1,4 +1,3 @@
-import { SQLiteColumn } from "drizzle-orm/sqlite-core"
 import { CredentialKind } from "./cred"
 import { ProgressRef, component_invalidate, component_register, emit_log, route_register } from "./server"
 import { MaybePromise, PassIdentifier } from "./types"
@@ -13,17 +12,23 @@ import { pass_sources_download_from_youtube_video } from "./passes/youtube_downl
 import { pass_sources_classify_chromaprint } from "./passes/chromaprint"
 import { pass_links_extrapolate_from_karent_album, pass_links_extrapolate_from_linkcore } from "./passes/links_distributors"
 
-const passes: PassBlock[] = [
+const passes: PassElement[] = [
 	{ name: 'youtube_video.meta.youtube_video', fn: pass_youtube_video_meta_youtube_video },
 	{ name: 'youtube_channel.extrapolate.from_channel_id', fn: pass_youtube_channel_extrapolate_from_channel_id },
 	{ name: 'youtube_channel.meta.youtube_channel', fn: pass_youtube_channel_meta_youtube_channel },
-	{ name: 'links.classify.link_shorteners', fn: pass_links_classify_link_shorteners },
-	{ name: 'links.classify.weak', fn: pass_links_classify_weak },
-	{ name: 'links.classify.strong', fn: pass_links_classify_strong },
-	{ name: 'links.extrapolate.from_karent_album', fn: pass_links_extrapolate_from_karent_album },
-	{ name: 'links.extrapolate.from_linkcore', fn: pass_links_extrapolate_from_linkcore },
-	// { name: 'all.extrapolate.from_links', fn: pass_all_extrapolate_from_links },
+	{
+		blocks: [
+			{ name: 'links.classify.link_shorteners', fn: pass_links_classify_link_shorteners },
+			{ name: 'links.classify.weak', fn: pass_links_classify_weak },
+			{ name: 'links.classify.strong', fn: pass_links_classify_strong },
+			{ name: 'links.extrapolate.from_karent_album', fn: pass_links_extrapolate_from_karent_album },
+			{ name: 'among speed', fn: () => Math.random() > 0.6 },
+			{ name: 'links.extrapolate.from_linkcore', fn: pass_links_extrapolate_from_linkcore },
+			// { name: 'all.extrapolate.from_links', fn: pass_all_extrapolate_from_links },
+		],
+	},
 	{ name: 'images.download.images', fn: pass_images_download_images },
+	{ name: 'among speed', fn: () => Math.random() > 0.6 },
 	{ name: 'sources.download.from_youtube_video', fn: pass_sources_download_from_youtube_video },
 	{ name: 'sources.classify.chromaprint', fn: pass_sources_classify_chromaprint },
 ]
@@ -32,25 +37,41 @@ const TRIP_COUNT_MAX = 10
 
 type PassState = {
 	state: PassStateEnum
-	idx: number
 	single_step: boolean
+	current_pass: PassGroupState
+	parent_pass: PassGroupState
+}
+
+type PassGroupState = {
+	parent?: PassGroupState | undefined
+	idx: number
 	breakpoints: Set<number>
 	mutations: Set<number>
 	trip_count: number
+	blocks: PassElementState[]
 }
 
-// state machine
-// - running -> pause
-// - running -> finished
-// - pause -> single step | run to completion | stop | reset
-// - finished -> reset
-// - single step -> running
-// - run to completion -> running
+type PassElementState = PassGroupState | PassBlock
 
-enum PassStateEnum {
-	Running,
-	PendingStop,
-	Stopped,
+function walk_passes(blocks: PassElement[], parent?: PassGroupState): PassGroupState {
+	const state: PassGroupState = {
+		idx: 0,
+		breakpoints: new Set(),
+		mutations: new Set(),
+		trip_count: 0,
+		parent,
+		blocks: [],
+	}
+
+	for (const block of blocks) {
+		if ('blocks' in block) {
+			state.blocks.push(walk_passes(block.blocks, state))
+		} else {
+			state.blocks.push(block)
+		}
+	}
+
+	return state
 }
 
 type PassBlock = {
@@ -59,62 +80,153 @@ type PassBlock = {
 	cred?: CredentialKind[] // capabilities
 }
 
+type PassGroup = { blocks: PassElement[] }
+type PassElement = PassGroup | PassBlock
+
+enum PassStateEnum {
+	Running,
+	ReadyNext,
+	PendingStop,
+	Stopped,
+	Finished,
+}
+
+let pass_state: PassState = {
+	state: PassStateEnum.Stopped,
+	single_step: false,
+	current_pass: walk_passes(passes),
+	parent_pass: undefined as any
+}
+
+pass_state.parent_pass = pass_state.current_pass
+
+function passstate_tostring(v: PassStateEnum) {
+	switch (v) {
+		case PassStateEnum.Running: return 'Running'
+		case PassStateEnum.ReadyNext: return 'ReadyNext'
+		case PassStateEnum.PendingStop: return 'PendingStop'
+		case PassStateEnum.Stopped: return 'Stopped'
+		case PassStateEnum.Finished: return 'Finished'
+	}
+}
+
+// Running, Finished -> ReadyNext
+//
+// ReadyNext -> Running -> ReadyNext (run pass)
+//                state := idx++
+//
+// ReadyNext (single_step) -> Stopped
+// ReadyNext (breakpoint on idx) -> Stopped
+//
+// Running (user action) -> PendingStop
+// PendingStop, ReadyNext -> Stopped
+//
+// ReadyNext, Stopped (end + !mutation) -> Finished
+//
+// Stopped, Finished -> ReadyNext (run button)
+
+// AfterRunning -> ReadyNext -> Running
+
 function pass_stop() {
 	if (pass_state.state == PassStateEnum.Running) {
-		pass_state.state = PassStateEnum.PendingStop		
+		pass_state.state = PassStateEnum.PendingStop
 	}
 	component_invalidate(pass_tostring)
 }
 
 let inside_pass_job = false
 
-async function pass_job() {
-	inside_pass_job = true
+async function state_machine() {
+	// default state should be Running
 
-	// typescript narrowing has no idea about other functions and their side effects
-	pass_state.state = PassStateEnum.Running as PassStateEnum
+	switch (pass_state.state) {
+		case PassStateEnum.PendingStop:
+		case PassStateEnum.Finished:
+		case PassStateEnum.Stopped:
+		case PassStateEnum.ReadyNext: {
+			if (pass_state.current_pass.idx >= pass_state.current_pass.blocks.length) {
+				pass_state.current_pass.idx = 0
 
-	exit: do {
-		if (pass_state.idx == 0) {
-			pass_state.mutations.clear()
-		}
-		while (pass_state.idx < passes.length) {
-			component_invalidate(pass_tostring)
-			const pass = passes[pass_state.idx]
-			if (await pass.fn()) {
-				pass_state.mutations.add(pass_state.idx)
+				if (pass_state.current_pass.mutations.size == 0) {
+					pass_state.current_pass.trip_count = 0
+
+					if (pass_state.current_pass.parent) {
+						console.log('drop down to parent')
+						pass_state.current_pass = pass_state.current_pass.parent
+						// needs to check for breakpoints, will come back here
+						if (pass_state.state != PassStateEnum.PendingStop) {
+							pass_state.state = PassStateEnum.ReadyNext
+						}
+						return
+					} else {
+						pass_state.state = PassStateEnum.Finished
+					}
+					return
+				}
+
+				pass_state.current_pass.trip_count++
+
+				if (pass_state.current_pass.trip_count >= TRIP_COUNT_MAX) {
+					emit_log(`[pass_job] forward progress trip count exceeded max of <i>${TRIP_COUNT_MAX}</i>`, 'error')
+					pass_state.state = PassStateEnum.Finished
+					pass_state.current_pass.trip_count = 0
+					return
+				}
 			}
-			pass_state.idx++
 
-			if (pass_state.single_step || pass_state.breakpoints.has(pass_state.idx)) {
-				pass_state.state = PassStateEnum.PendingStop
+			if (pass_state.current_pass.idx == 0) {
+				pass_state.current_pass.mutations.clear()
+			}
+
+			const pass = pass_state.current_pass.blocks[pass_state.current_pass.idx]
+			if ('blocks' in pass) {
+				console.log('entering child')
+				pass_state.current_pass.idx++
+				pass_state.current_pass = pass
 			}
 
 			if (pass_state.state == PassStateEnum.PendingStop) {
 				pass_state.state = PassStateEnum.Stopped
-				break exit
+				return
 			}
-		}
-		pass_state.idx = 0
-		pass_state.trip_count++
-		if (pass_state.trip_count >= TRIP_COUNT_MAX) {
-			emit_log(`[pass_job] forward progress trip count exceeded max of <i>${TRIP_COUNT_MAX}</i>`, 'error')
-			pass_state.state = PassStateEnum.Stopped
-			pass_state.trip_count = 0
-			break exit
-		}
-	} while (pass_state.mutations.size > 0)
 
-	// single stepping over the last pass
-	if (pass_state.idx >= passes.length) {
-		pass_state.idx = 0
-	}
+			// single step or breakpoint
+			if (pass_state.state != PassStateEnum.Finished && pass_state.state != PassStateEnum.Stopped) {
+				if (pass_state.single_step || pass_state.current_pass.breakpoints.has(pass_state.current_pass.idx)) {
+					pass_state.state = PassStateEnum.Stopped
+					return
+				}
+			}
+			pass_state.state = PassStateEnum.Running
+			break
+		}
+		case PassStateEnum.Running: {
+			const pass = pass_state.current_pass.blocks[pass_state.current_pass.idx] as PassBlock
 
-	if (pass_state.mutations.size == 0) {
-		pass_state.trip_count = 0
-		pass_state.state = PassStateEnum.Stopped
+			await Bun.sleep(100)
+			if (await pass.fn()) {
+				pass_state.current_pass.mutations.add(pass_state.current_pass.idx)
+			}
+			pass_state.current_pass.idx++
+
+			// typescript narrowing has no idea about other functions and their side effects
+			if ((pass_state.state as PassStateEnum) != PassStateEnum.PendingStop) {
+				pass_state.state = PassStateEnum.ReadyNext
+			}
+			break
+		}
 	}
-	component_invalidate(pass_tostring)
+}
+
+// you know, this should be an async generator
+async function pass_job() {
+	inside_pass_job = true
+
+	do {
+		await state_machine()
+		component_invalidate(pass_tostring)
+		console.log('state', passstate_tostring(pass_state.state))
+	} while ((pass_state.state as PassStateEnum) != PassStateEnum.Finished && (pass_state.state as PassStateEnum) != PassStateEnum.Stopped)
 
 	inside_pass_job = false
 }
@@ -128,62 +240,107 @@ function pass_run() {
 		return
 	}
 
+	if (pass_state.state == PassStateEnum.Finished) {
+		console.log('restart')
+		
+		function walk_reset(state: PassGroupState) {
+			state.idx = 0
+			state.mutations.clear()
+			for (const block of state.blocks) {
+				if ('blocks' in block) {
+					walk_reset(block)
+				}
+			}
+		}
+
+		pass_state.current_pass = pass_state.parent_pass
+		walk_reset(pass_state.current_pass)
+	}
+
 	pass_job()
+}
+
+function pass_tostring_element(pass: PassGroupState, idx: number, element: PassElementState, idchain: string) {
+	if ('blocks' in element) {
+		return <>
+			<tr>
+				<td></td>
+				<td>{pass_tostring_walk(element, idchain)}</td>
+			</tr>
+		</>
+	}
+	
+	const id = `pass-table-ch${idx}`
+
+	let pass_class = ''
+	if (idx == pass.idx && pass == pass_state.current_pass) {
+		switch (pass_state.state) {
+			case PassStateEnum.ReadyNext:
+			case PassStateEnum.Running: pass_class = 'table-running'; break
+			case PassStateEnum.PendingStop: pass_class = 'table-pending-stop'; break
+			case PassStateEnum.Finished:
+			case PassStateEnum.Stopped: pass_class = 'table-stopped'; break
+		}
+	}
+	let pass_mut_class = ''
+	if (pass.mutations.has(idx)) {
+		pass_mut_class = 'table-running'
+	}
+
+	// TODO: impl active
+	return (
+		<tr>
+			<td class={pass_class}>
+				<input checked={pass.breakpoints.has(idx)} hx-trigger="click" hx-vals={`{"idx":"${idchain}"}`} hx-swap="none" hx-post={`/ui/pass_toggle_bp`} type="checkbox" name="state" id={id} />
+				<label for={id} />
+			</td>
+			<td class={pass_class}>{element.name}</td>
+			<td class={pass_mut_class}>()</td>
+		</tr>
+	)
+}
+
+function pass_tostring_walk(state: PassGroupState, idchain: string = '') {
+	let footer = <></>
+	let header = <></>
+	if (state == pass_state.parent_pass) {
+		footer = <tfoot>
+			<tr>
+				<td>
+					<input checked={pass_state.single_step} hx-trigger="click" hx-swap="none" hx-post={`/ui/pass_toggle_st`} type="checkbox" name="state" id="pass-table-st" />
+					<label class="tooltip" data-tooltip title="single step execution" for="pass-table-st" />
+				</td>
+				<td>
+					<button hx-post="/ui/pass_run" hx-swap="none" hx-trigger="click">Run</button>
+					<button hx-post="/ui/pass_stop" hx-swap="none" hx-trigger="click">Stop</button>
+				</td>
+			</tr>
+		</tfoot>
+
+		header = <thead>
+			<tr>
+				<td style="text-align: end;">{pass_state.current_pass.trip_count}</td>
+				<td>Pass</td>
+			</tr>
+		</thead>
+	}
+
+	return (
+		<table>
+			{header}
+			<tbody>
+				{...state.blocks.map((pass, idx) => pass_tostring_element(state, idx, pass, idchain + '-' + idx))}
+			</tbody>
+			{footer}
+		</table>
+	)
 }
 
 function pass_tostring() {
 	return (
-		<table id="pass-table">
-			<thead>
-				<tr>
-					<td style="text-align: end;">{pass_state.trip_count}</td>
-					<td>Pass</td>
-				</tr>
-			</thead>
-			<tbody>
-				{...passes.map((pass, idx) => {
-					const id = `pass-table-ch${idx}`
-
-					let pass_class = ''
-					if (idx == pass_state.idx) {
-						switch (pass_state.state) {
-							case PassStateEnum.Running: pass_class = 'table-running'; break
-							case PassStateEnum.PendingStop: pass_class = 'table-pending-stop'; break
-							case PassStateEnum.Stopped: pass_class = 'table-stopped'; break
-						}
-					}
-					let pass_mut_class = ''
-					if (pass_state.mutations.has(idx)) {
-						pass_mut_class = 'table-running'
-					}
-
-					// TODO: impl active
-					return (
-						<tr>
-							<td class={pass_class}>
-								<input checked={pass_state.breakpoints.has(idx)} hx-trigger="click" hx-vals={`{"idx":${idx}}`} hx-swap="none" hx-post={`/ui/pass_toggle_bp`} type="checkbox" name="state" id={id} />
-								<label for={id} />
-							</td>
-							<td class={pass_class}>{pass.name}</td>
-							<td class={pass_mut_class}>()</td>
-						</tr>
-					)
-				})}
-			</tbody>
-			<tfoot>
-				<tr>
-					<td>
-						<input checked={pass_state.single_step} hx-trigger="click" hx-swap="none" hx-post={`/ui/pass_toggle_st`} type="checkbox" name="state" id="pass-table-st" />
-						<label class="tooltip" data-tooltip title="single step execution" for="pass-table-st" />
-					</td>
-					<td>
-						<button hx-post="/ui/pass_run" hx-swap="none" hx-trigger="click">Run</button>
-						<button hx-post="/ui/pass_stop" hx-swap="none" hx-trigger="click">Stop</button>
-					</td>
-					<td class={pass_state.mutations.size > 0 ? 'table-running' : ''}>()</td>
-				</tr>
-			</tfoot>
-		</table>
+		<div id="pass-table">
+			{pass_tostring_walk(pass_state.parent_pass)}
+		</div>
 	)
 }
 
@@ -211,15 +368,6 @@ route_register('POST', 'pass_stop', pass_stop)
 route_register('POST', 'pass_toggle_st', pass_toggle_st)
 route_register('POST', 'pass_toggle_bp', pass_toggle_bp)
 component_register(pass_tostring, 'left')
-
-let pass_state: PassState = {
-	idx: 0,
-	breakpoints: new Set(),
-	single_step: false,
-	mutations: new Set(),
-	state: PassStateEnum.Stopped,
-	trip_count: 0,
-}
 
 export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit: number, ref: ProgressRef | undefined, next: (v: T) => Promise<void>): Promise<void> {
 	if (arr.length == 0) {
