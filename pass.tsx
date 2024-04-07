@@ -151,7 +151,6 @@ async function state_machine() {
 					pass_state.current_pass.trip_count = 0
 
 					if (pass_state.current_pass.parent) {
-						console.log('drop down to parent')
 						pass_state.current_pass = pass_state.current_pass.parent
 						// needs to check for breakpoints, will come back here
 						if (pass_state.state != PassStateEnum.PendingStop) {
@@ -180,7 +179,6 @@ async function state_machine() {
 
 			const pass = pass_state.current_pass.blocks[pass_state.current_pass.idx]
 			if ('blocks' in pass) {
-				console.log('entering child')
 				pass_state.current_pass.idx++
 				pass_state.current_pass = pass
 			}
@@ -225,7 +223,6 @@ async function pass_job() {
 	do {
 		await state_machine()
 		component_invalidate(pass_tostring)
-		console.log('state', passstate_tostring(pass_state.state))
 	} while ((pass_state.state as PassStateEnum) != PassStateEnum.Finished && (pass_state.state as PassStateEnum) != PassStateEnum.Stopped)
 
 	inside_pass_job = false
@@ -241,8 +238,6 @@ function pass_run() {
 	}
 
 	if (pass_state.state == PassStateEnum.Finished) {
-		console.log('restart')
-		
 		function walk_reset(state: PassGroupState) {
 			state.idx = 0
 			state.mutations.clear()
@@ -260,17 +255,12 @@ function pass_run() {
 	pass_job()
 }
 
-function pass_tostring_element(pass: PassGroupState, idx: number, element: PassElementState, idchain: string) {
+function pass_tostring_element(pass: PassGroupState, idx: number, element: PassElementState, idchain: string, iddepth: number): JSX.Element {
 	if ('blocks' in element) {
 		return <>
-			<tr>
-				<td></td>
-				<td>{pass_tostring_walk(element, idchain)}</td>
-			</tr>
+			{pass_tostring_walk(element, idchain, iddepth + 1)}
 		</>
 	}
-	
-	const id = `pass-table-ch${idx}`
 
 	let pass_class = ''
 	if (idx == pass.idx && pass == pass_state.current_pass) {
@@ -287,12 +277,24 @@ function pass_tostring_element(pass: PassGroupState, idx: number, element: PassE
 		pass_mut_class = 'table-running'
 	}
 
-	// TODO: impl active
+	let colour_style = ''
+	if (iddepth > 0) {
+		// nice colours taken from vscode-indent-rainbow
+		const colours = [
+			"rgba(255,255,64,0.6)",
+			"rgba(127,255,127,0.6)",
+			"rgba(255,127,255,0.6)",
+			"rgba(79,236,236,0.6)",
+		]
+
+		colour_style = `border-left: 1px solid ${colours[(iddepth - 1) % colours.length]} !important;`
+	}
+
 	return (
 		<tr>
-			<td class={pass_class}>
-				<input checked={pass.breakpoints.has(idx)} hx-trigger="click" hx-vals={`{"idx":"${idchain}"}`} hx-swap="none" hx-post={`/ui/pass_toggle_bp`} type="checkbox" name="state" id={id} />
-				<label for={id} />
+			<td style={colour_style} class={pass_class}>
+				<input checked={pass.breakpoints.has(idx)} hx-trigger="click" hx-vals={`{"idx":"${idchain}"}`} hx-swap="none" hx-post={`/ui/pass_toggle_bp`} type="checkbox" name="state" id={idchain} />
+				<label for={idchain} />
 			</td>
 			<td class={pass_class}>{element.name}</td>
 			<td class={pass_mut_class}>()</td>
@@ -300,46 +302,40 @@ function pass_tostring_element(pass: PassGroupState, idx: number, element: PassE
 	)
 }
 
-function pass_tostring_walk(state: PassGroupState, idchain: string = '') {
-	let footer = <></>
-	let header = <></>
-	if (state == pass_state.parent_pass) {
-		footer = <tfoot>
-			<tr>
-				<td>
-					<input checked={pass_state.single_step} hx-trigger="click" hx-swap="none" hx-post={`/ui/pass_toggle_st`} type="checkbox" name="state" id="pass-table-st" />
-					<label class="tooltip" data-tooltip title="single step execution" for="pass-table-st" />
-				</td>
-				<td>
-					<button hx-post="/ui/pass_run" hx-swap="none" hx-trigger="click">Run</button>
-					<button hx-post="/ui/pass_stop" hx-swap="none" hx-trigger="click">Stop</button>
-				</td>
-			</tr>
-		</tfoot>
-
-		header = <thead>
-			<tr>
-				<td style="text-align: end;">{pass_state.current_pass.trip_count}</td>
-				<td>Pass</td>
-			</tr>
-		</thead>
-	}
-
+function pass_tostring_walk(state: PassGroupState, idchain: string = '', iddepth = 0) {
 	return (
-		<table>
-			{header}
-			<tbody>
-				{...state.blocks.map((pass, idx) => pass_tostring_element(state, idx, pass, idchain + '-' + idx))}
-			</tbody>
-			{footer}
-		</table>
+		<>
+			{...state.blocks.map((pass, idx) => pass_tostring_element(state, idx, pass, idchain + '-' + idx, iddepth))}
+		</>
 	)
 }
 
 function pass_tostring() {
 	return (
 		<div id="pass-table">
-			{pass_tostring_walk(pass_state.parent_pass)}
+			<table>
+				<tfoot>
+					<tr>
+						<td>
+							<input checked={pass_state.single_step} hx-trigger="click" hx-swap="none" hx-post={`/ui/pass_toggle_st`} type="checkbox" name="state" id="pass-table-st" />
+							<label class="tooltip" data-tooltip title="single step execution" for="pass-table-st" />
+						</td>
+						<td>
+							<button hx-post="/ui/pass_run" hx-swap="none" hx-trigger="click">Run</button>
+							<button hx-post="/ui/pass_stop" hx-swap="none" hx-trigger="click">Stop</button>
+						</td>
+					</tr>
+				</tfoot>
+				<tbody>
+					{pass_tostring_walk(pass_state.parent_pass, 'pass')}
+				</tbody>
+				<thead>
+					<tr>
+						<td style="text-align: end;">{pass_state.current_pass.trip_count}</td>
+						<td>Pass</td>
+					</tr>
+				</thead>
+			</table>
 		</div>
 	)
 }
@@ -351,15 +347,29 @@ async function pass_toggle_st(req: Request) {
 }
 
 async function pass_toggle_bp(req: Request) {
-	const data = await req.formData()
+	try {
+		const data = await req.formData()
 
-	const is_checked = data.get('state') == 'on'
-	const idx = Number(data.get('idx')) // NaN on anything else
+		const is_checked = data.get('state') == 'on'
+		const idx = data.get('idx') as string // NaN on anything else
 
-	if (is_checked) {
-		pass_state.breakpoints.add(idx)
-	} else {
-		pass_state.breakpoints.delete(idx)
+		// pass-1-5-0-2 -> pass.blocks[1].blocks[5].blocks[0].blocks[2]
+
+		const idx_split = idx.split('-').slice(1).map(v => parseInt(v))
+		const idx_last = idx_split.pop() as number
+
+		let pass = pass_state.parent_pass
+		for (const idx of idx_split) {
+			pass = pass.blocks[idx] as PassGroupState
+		}
+
+		if (is_checked) {
+			pass.breakpoints.add(idx_last)
+		} else {
+			pass.breakpoints.delete(idx_last)
+		}
+	} catch {
+		// invalid index
 	}
 }
 
