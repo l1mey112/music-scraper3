@@ -125,8 +125,6 @@ export async function pass_links_extrapolate_from_linkcore() {
 		}
 		html_extractor.transform(await resp.text())
 
-		console.log(derived_urls)
-
 		const to_insert = derived_urls.map(url => ({
 			derived_from: id,
 			ident: ident,

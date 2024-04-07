@@ -1,9 +1,13 @@
-import { index, sqliteTable, text, integer, unique, blob } from "drizzle-orm/sqlite-core";
+import { index, sqliteTable, text, integer, unique, blob, real } from "drizzle-orm/sqlite-core";
 import { LiteralHash, ImageKind, PIdent, YoutubeChannelId, YoutubeVideoId, FSHash } from "./types";
 
 // .references(() => youtube_channel.id),
-// these are no-ops in sqlite with drizles configuration, they don't create indexes
+// these are no-ops in sqlite, they don't create indexes
 // a default index is created on primary keys anyway
+
+export const track = sqliteTable('track', {
+	id: integer('id').primaryKey(),
+})
 
 // WITHOUT-ROWID: youtube_video
 export const youtube_video = sqliteTable('youtube_video', {
@@ -66,6 +70,10 @@ export const links = sqliteTable('links', {
 // making `hash` non null would allow a proper PK and no row id table
 // please look into this.
 
+// TODO: tbh make `hash` a URL then gate it behind a pass
+//       if it fails, no backoff just delete the entry
+//       check if starts with https:// or http:// (nanoid has no //)
+
 // relies on rowid
 export const images = sqliteTable('images', {
 	hash: text('hash').$type<FSHash>(),
@@ -89,12 +97,17 @@ export const images = sqliteTable('images', {
 // compression of a chromaprint is a BAD idea, the entropy is already way too high
 // i tried, you'll save 100 bytes in 4000, not worth it
 
+// CHANGED: for now, chromaprint is in compressed base64 URL safe format
+//          IGNORE ALL ABOVE WITHIN REASON
+
 // a source is a video/audio file, always containing some form of audio
 // WITHOUT-ROWID: sources
 export const sources = sqliteTable('sources', {
 	hash: text('hash').primaryKey().$type<FSHash>(),
 	ident: text('ident').$type<PIdent>().notNull(),
-	chromaprint: blob('chromaprint').$type<Uint8Array>(),
+	chromaprint: text('chromaprint'),
+	chromaprint_duration: integer('chromaprint_duration'),
+	acoustid: text('acoustid'),
 	width: integer('width'),
 	height: integer('height'),
 }, (t) => ({

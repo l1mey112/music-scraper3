@@ -9,7 +9,7 @@ import { pass_youtube_channel_extrapolate_from_channel_id, pass_youtube_channel_
 import { pass_all_extrapolate_from_links, pass_links_classify_link_shorteners, pass_links_classify_strong, pass_links_classify_weak } from "./passes/links"
 import { pass_images_download_images } from "./passes/images"
 import { pass_sources_download_from_youtube_video } from "./passes/youtube_download"
-import { pass_sources_classify_chromaprint } from "./passes/chromaprint"
+import { pass_sources_classify_chromaprint, pass_sources_classify_yv_chromaprint_to_acoustid } from "./passes/chromaprint"
 import { pass_links_extrapolate_from_karent_album, pass_links_extrapolate_from_linkcore } from "./passes/links_distributors"
 
 const passes: PassElement[] = [
@@ -22,15 +22,14 @@ const passes: PassElement[] = [
 			{ name: 'links.classify.weak', fn: pass_links_classify_weak },
 			{ name: 'links.classify.strong', fn: pass_links_classify_strong },
 			{ name: 'links.extrapolate.from_karent_album', fn: pass_links_extrapolate_from_karent_album },
-			{ name: 'among speed', fn: () => Math.random() > 0.6 },
 			{ name: 'links.extrapolate.from_linkcore', fn: pass_links_extrapolate_from_linkcore },
 			// { name: 'all.extrapolate.from_links', fn: pass_all_extrapolate_from_links },
 		],
 	},
 	{ name: 'images.download.images', fn: pass_images_download_images },
-	{ name: 'among speed', fn: () => Math.random() > 0.6 },
 	{ name: 'sources.download.from_youtube_video', fn: pass_sources_download_from_youtube_video },
 	{ name: 'sources.classify.chromaprint', fn: pass_sources_classify_chromaprint },
+	{ name: 'sources.classify.yv_chromaprint_to_acoustid', fn: pass_sources_classify_yv_chromaprint_to_acoustid },
 ]
 
 const TRIP_COUNT_MAX = 10
@@ -201,7 +200,6 @@ async function state_machine() {
 		case PassStateEnum.Running: {
 			const pass = pass_state.current_pass.blocks[pass_state.current_pass.idx] as PassBlock
 
-			await Bun.sleep(100)
 			if (await pass.fn()) {
 				pass_state.current_pass.mutations.add(pass_state.current_pass.idx)
 			}
@@ -417,4 +415,57 @@ export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit:
 
 	// wait for all active operations to complete
 	await Promise.all(active_promises)
+}
+
+// run M operations per N milliseconds
+// https://thoughtspile.github.io/2018/07/07/rate-limit-promises/
+// this doesn't really follow the guide, it may be suboptimal but ehh
+export async function run_with_throughput_limit<T>(arr: T[], M: number, N: number, ref: ProgressRef | undefined, next: (v: T) => Promise<void>): Promise<void> {
+	if (arr.length == 0) {
+		return
+	}
+	
+	type Operation = { item: Promise<void>, date: Date }
+	
+	// in flight operation | last operation time
+	const active_promises: Operation[] = []
+
+	if (ref) {
+		ref.emit(0)
+	}
+
+	let di = 0
+	const diff = 100 / arr.length
+	for (const item of arr) {
+		// insert
+		if (active_promises.length < M) {
+			active_promises.push({ item: next(item), date: new Date(Date.now() + N) })
+			continue
+		}
+
+		// find operation with the oldest date
+
+		let oldest_idx = 0
+		for (let i = 1; i < active_promises.length; i++) {
+			if (active_promises[i].date < active_promises[oldest_idx].date) {
+				oldest_idx = i
+			}
+		}
+
+		// Bun sleeps up till the date
+		const oldest = active_promises[oldest_idx]
+		await oldest.item
+		await Bun.sleep(oldest.date)
+
+		// update progress
+		if (ref) {
+			di += diff
+			ref.emit(di)
+		}
+
+		// replace
+		active_promises[oldest_idx] = { item: next(item), date: new Date(Date.now() + N) }
+	}
+
+	await Promise.all(active_promises.map(v => v.item))
 }

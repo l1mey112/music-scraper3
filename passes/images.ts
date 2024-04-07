@@ -23,6 +23,7 @@ export function db_images_append_url(pk: SQLiteTable, pk_id: string | number, ki
 
 // images.download.images
 export async function pass_images_download_images() {
+	let update = false
 	const urls = db.select({ rowid: sql<number>`rowid`, url: sql<string>`url` })
 		.from(schema.images)
 		.where(sql`hash is null and url is not null and ${db_backoff_sql(schema.images, schema.images.url, 'images.download.images')}`)
@@ -51,7 +52,10 @@ export async function pass_images_download_images() {
 			.set({ hash: hash })
 			.where(sql`rowid = ${rowid}`)
 			.run()
+		update = true
 	})
 
 	pc.close()
+
+	return update
 }
