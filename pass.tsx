@@ -11,6 +11,7 @@ import { pass_all_extrapolate_from_links, pass_links_classify_link_shorteners, p
 import { pass_images_download_images } from "./passes/images"
 import { pass_sources_download_from_youtube_video } from "./passes/youtube_download"
 import { pass_sources_classify_chromaprint } from "./passes/chromaprint"
+import { pass_links_extrapolate_from_karent_album, pass_links_extrapolate_from_linkcore } from "./passes/links_distributors"
 
 const passes: PassBlock[] = [
 	{ name: 'youtube_video.meta.youtube_video', fn: pass_youtube_video_meta_youtube_video },
@@ -19,6 +20,8 @@ const passes: PassBlock[] = [
 	{ name: 'links.classify.link_shorteners', fn: pass_links_classify_link_shorteners },
 	{ name: 'links.classify.weak', fn: pass_links_classify_weak },
 	{ name: 'links.classify.strong', fn: pass_links_classify_strong },
+	{ name: 'links.extrapolate.from_karent_album', fn: pass_links_extrapolate_from_karent_album },
+	{ name: 'links.extrapolate.from_linkcore', fn: pass_links_extrapolate_from_linkcore },
 	// { name: 'all.extrapolate.from_links', fn: pass_all_extrapolate_from_links },
 	{ name: 'images.download.images', fn: pass_images_download_images },
 	{ name: 'sources.download.from_youtube_video', fn: pass_sources_download_from_youtube_video },

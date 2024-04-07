@@ -50,7 +50,6 @@ export const links = sqliteTable('links', {
 	data: text('data').notNull(),
 }, (t) => ({
 	pidx: index("links.ident_idx").on(t.ident),
-	unique: unique().on(t.ident, t.kind, t.data, t.derived_from),
 }))
 
 //          | hash | null hash

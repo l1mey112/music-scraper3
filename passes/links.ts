@@ -5,7 +5,6 @@ import { sql } from "drizzle-orm"
 import { run_with_concurrency_limit } from "../pass"
 import { ProgressRef } from "../server"
 import { meta_youtube_handle_to_id, youtube_channel_exists, youtube_video_exists } from "./youtube"
-import { SQLiteTable } from "drizzle-orm/sqlite-core"
 import { db_backoff_sql, db_register_backoff } from "../db_misc"
 
 // matches ...99a7_q9XuZY）←｜→次作：（しばしまたれよ）
@@ -46,12 +45,12 @@ type Link =
 	| { kind: 'twitter_user',         data: string } // twitter.com/{} + x.com/{}
 	| { kind: 'karent_album_id',      data: string } // karent.jp/album/{}
 	| { kind: 'karent_artist_id',     data: string } // karent.jp/artist/{}
+	| { kind: 'linkcore',             data: string } // linkco.re/{}
 	| { kind: 'unknown',              data: string } // full URL as-is
 
 // https://music.apple.com/au/album/ALBUM_NAME/ALBUM_ID?i=TRACK_ID
 
 /*
-	| { kind: 'linkcore',             data: string } // linkco.re/{}
 	| { kind: 'lnkto',                data: string } // lnk.to/{}
 	| { kind: 'lnkto_composite',      data: strin2 } // {}.lnk.to/{} -> {}/{}
 	| { kind: 'bitly_short_link',     data: string } // bit.ly/{}
@@ -150,6 +149,9 @@ const weak_classify_links: WeakClassifyLinks = {
 	'karent_artist_id': [
 		{ domain: 'karent.jp', r: /\/artist\/([^\/]+)/ },
 	],
+	'linkcore': [
+		{ domain: 'linkco.re', r: /\/([^\/]+)/ },
+	],
 }
 
 function link_classify(url: string, classify_links: ClassifyBlock): { kind: string, data: string } | undefined {
@@ -207,10 +209,6 @@ function link_classify(url: string, classify_links: ClassifyBlock): { kind: stri
 					}
 					match_idents.push(param)
 				}
-			}
-
-			if ((match.r || match.m) && match_idents.length === 0) {
-				throw new Error('no match idents found - should never happen')
 			}
 
 			return { kind: kind as Link["kind"], data: match_idents.join('/') }
@@ -376,13 +374,17 @@ export async function pass_all_extrapolate_from_links() {
 }
 
 // https://gist.github.com/HoangTuan110/e6eb412ed32657c841fcc2c12c156f9d
-const link_shorteners = ['bit.ly', 'cutt.ly', 'nico.ms', 't.co']
+
+// handle tunecore links as well, they're link shorteners
+// https://www.tunecore.co.jp/to/apple_music/687558
 
 const link_shorteners_classify: ClassifyBlock = {
-	'bitly':    [ { domain: 'bit.ly'  } ],
-	'cuttly':   [ { domain: 'cutt.ly' } ],
-	'niconico': [ { domain: 'nico.ms' } ],
-	'tco':      [ { domain: 't.co'    } ],
+	'bitly':    [ { domain: 'bit.ly'                      } ],
+	'cuttly':   [ { domain: 'cutt.ly'                     } ],
+	'niconico': [ { domain: 'nico.ms'                     } ],
+	'tco':      [ { domain: 't.co'                        } ],
+	'xgd':      [ { domain: 'x.gd'                        } ],
+	'tunecore': [ { domain: 'tunecore.co.jp', r: /\/to\// } ],
 }
 
 // links.classify.link_shorteners
@@ -399,16 +401,19 @@ export async function pass_links_classify_link_shorteners() {
 	const pc = new ProgressRef('links.classify.link_shorteners')
 
 	await run_with_concurrency_limit(k, 5, pc, async ({ id, data }) => {
-		const req = await fetch(data, { method: 'HEAD' })
+		const req = await fetch(data)
 
 		// even if it passes through the shortener
 		// 1. it might not be a valid link
 		// 2. the server might not support HEAD requests (though supporting GET just fine)
 		//    some servers return 404 on HEAD (200 for GET) but URL is intact
 
+		// don't req HEAD, just req GET. annoying that they aren't standards compliant
+
 		// no redirect
 		// most likely req.ok isn't true as well
 		if (req.url === data) {
+			console.log(req.url, data)
 			db_register_backoff(schema.links, id, 'links.classify.link_shorteners')
 			return
 		}
@@ -416,7 +421,7 @@ export async function pass_links_classify_link_shorteners() {
 		// just go ahead and insert it back in regardless
 
 		db.update(schema.links)
-			.set({ kind: 'unknown', data: req.url })
+			.set({ data: req.url })
 			.where(sql`id = ${id}`)
 			.run()
 		updated++

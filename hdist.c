@@ -1,8 +1,9 @@
 #include <sqlite3ext.h>
 SQLITE_EXTENSION_INIT1
-#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
+
+// TODO: port fcompare.ts to C to use inside sqlite
 
 // no stdbit :(
 // #include <stdbit.h>
