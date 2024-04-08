@@ -9,7 +9,7 @@ import { pass_youtube_channel_extrapolate_from_channel_id, pass_youtube_channel_
 import { pass_all_extrapolate_from_links, pass_links_classify_link_shorteners, pass_links_classify_strong, pass_links_classify_weak } from "./passes/links"
 import { pass_images_download_images } from "./passes/images"
 import { pass_sources_download_from_youtube_video } from "./passes/youtube_download"
-import { pass_sources_classify_chromaprint, pass_sources_classify_yv_chromaprint_to_acoustid } from "./passes/chromaprint"
+import { pass_sources_classify_chromaprint } from "./passes/chromaprint"
 import { pass_links_extrapolate_from_karent_album, pass_links_extrapolate_from_linkcore } from "./passes/links_distributors"
 
 const passes: PassElement[] = [
@@ -29,7 +29,6 @@ const passes: PassElement[] = [
 	{ name: 'images.download.images', fn: pass_images_download_images },
 	{ name: 'sources.download.from_youtube_video', fn: pass_sources_download_from_youtube_video },
 	{ name: 'sources.classify.chromaprint', fn: pass_sources_classify_chromaprint },
-	{ name: 'sources.classify.yv_chromaprint_to_acoustid', fn: pass_sources_classify_yv_chromaprint_to_acoustid },
 ]
 
 const TRIP_COUNT_MAX = 10

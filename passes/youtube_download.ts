@@ -29,6 +29,7 @@ export async function pass_sources_download_from_youtube_video() {
 			ext: string
 			width: number
 			height: number
+			duration: number
 		}
 
 		const args = [
@@ -39,7 +40,7 @@ export async function pass_sources_download_from_youtube_video() {
 			path + ".%(ext)s",
 			"--no-simulate",
 			"--print",
-			"{\"ext\":%(ext)j,\"width\":%(width)j,\"height\":%(height)j}",
+			"{\"ext\":%(ext)j,\"width\":%(width)j,\"height\":%(height)j,\"duration\":%(duration)j}",
 		]
 
 		// they decide the extension
@@ -54,6 +55,7 @@ export async function pass_sources_download_from_youtube_video() {
 				ident: "yv/" + id,
 				width: output.width,
 				height: output.height,
+				duration_s: output.duration,
 			})
 			.run()
 	})

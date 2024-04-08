@@ -10,7 +10,7 @@ import { db_backoff_sql, db_fs_hash_path, db_register_backoff } from "../db_misc
 export async function pass_sources_classify_chromaprint() {
 	const k = db.select({ hash: schema.sources.hash })
 		.from(schema.sources)
-		.where(sql`${schema.sources.chromaprint} is null or ${schema.sources.chromaprint_duration} is null`)
+		.where(sql`${schema.sources.chromaprint} is null`)
 		.all()
 	
 	if (k.length == 0) {
@@ -20,11 +20,11 @@ export async function pass_sources_classify_chromaprint() {
 	const pc = new ProgressRef('sources.classify.chromaprint')
 
 	await run_with_concurrency_limit(k, 10, pc, async ({ hash }) => {
-		const fpcalc = await $`fpcalc -json ${db_fs_hash_path(hash)}`.quiet()
+		const fpcalc = await $`fpcalc -raw -json ${db_fs_hash_path(hash)}`.quiet()
 
 		type FpCalc = {
 			duration: number
-			fingerprint: string
+			fingerprint: number[]
 		}
 
 		// rare
@@ -33,11 +33,12 @@ export async function pass_sources_classify_chromaprint() {
 		}
 
 		const json: FpCalc = fpcalc.json()
+		const fingerprint = new Uint32Array(json.fingerprint)
 
 		// acoustid API only supports integer durations, but fpcalc returns float durations ???
-
+		
 		db.update(schema.sources)
-			.set({ chromaprint: json.fingerprint, chromaprint_duration: Math.floor(json.duration) })
+			.set({ chromaprint: new Uint8Array(fingerprint.buffer) })
 			.where(sql`${schema.sources.hash} = ${hash}`)
 			.run()
 	})
@@ -48,7 +49,7 @@ export async function pass_sources_classify_chromaprint() {
 }
 
 // sources.classify.yv_chromaprint_to_acoustid
-export async function pass_sources_classify_yv_chromaprint_to_acoustid() {
+/* export async function pass_sources_classify_yv_chromaprint_to_acoustid() {
 	const k = db.select({ hash: schema.sources.hash, chromaprint: schema.sources.chromaprint, chromaprint_duration: schema.sources.chromaprint_duration })
 		.from(schema.sources)
 		.where(sql`${schema.sources.chromaprint} is not null and ${schema.sources.chromaprint_duration} is not null and ${schema.sources.ident} like 'yv/%'
@@ -138,4 +139,4 @@ type AcoustIdRoot = {
 		score: number
 	}>
 	status: string
-}
+} */

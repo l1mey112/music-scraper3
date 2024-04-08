@@ -140,7 +140,7 @@ static void acoustid_compare2(sqlite3_context *ctx, int argc, sqlite3_value **ar
 		}
 	}
 
-	float diversity = fmin(fmin(1.0, (float)(auniq + 10) / asize + 0.5), fmin(1.0, (float)(buniq + 10) / bsize + 0.5));
+	float diversity = fminf(fminf(1.0, (float)(auniq + 10) / asize + 0.5), fminf(1.0, (float)(buniq + 10) / bsize + 0.5));
 
 	sqlite3_log(SQLITE_OK, "acoustid_compare2: offset %d, offset score %d, size %d, uniq size %d, diversity %f", topoffset, topcount, size * 2, imax(auniq, buniq), diversity);
 

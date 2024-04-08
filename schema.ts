@@ -97,17 +97,13 @@ export const images = sqliteTable('images', {
 // compression of a chromaprint is a BAD idea, the entropy is already way too high
 // i tried, you'll save 100 bytes in 4000, not worth it
 
-// CHANGED: for now, chromaprint is in compressed base64 URL safe format
-//          IGNORE ALL ABOVE WITHIN REASON
-
 // a source is a video/audio file, always containing some form of audio
 // WITHOUT-ROWID: sources
 export const sources = sqliteTable('sources', {
 	hash: text('hash').primaryKey().$type<FSHash>(),
 	ident: text('ident').$type<PIdent>().notNull(),
-	chromaprint: text('chromaprint'),
-	chromaprint_duration: integer('chromaprint_duration'),
-	acoustid: text('acoustid'),
+	duration_s: real('duration_s').notNull(), // not entirely accurate, but close enough
+	chromaprint: blob('chromaprint').$type<Uint8Array>(),
 	width: integer('width'),
 	height: integer('height'),
 }, (t) => ({
