@@ -86,10 +86,15 @@ async function meta_youtube_channel(channel_id: string): Promise<YoutubeChannel>
 }
 
 // magnitudes faster
-async function meta_youtube_video(video_id: string): Promise<YoutubeVideo> {
+// cannot have more than 50 of these, assume they're in order???
+async function meta_youtube_video(video_ids: string[]): Promise<YoutubeVideo[]> {
+	if (video_ids.length > 50) {
+		throw new Error(`youtube video req cannot have more than 50 ids (ids: ${video_ids.join(',')})`)
+	}
+
 	// their API is sloooowww
 	//const resp = await fetch(`https://yt4.lemnoslife.com/noKey/videos?id=${video_id}&part=snippet`, {
-	const resp = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${default_key}&id=${video_id}&part=snippet`, {
+	const resp = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${default_key}&id=${video_ids.join(',')}&part=snippet`, {
 		headers: {
 			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
 			"Referer": "https://mattw.io/",
@@ -98,14 +103,17 @@ async function meta_youtube_video(video_id: string): Promise<YoutubeVideo> {
 
 	const json = await resp.json() as any
 	if (!resp.ok) {
-		throw new Error(`youtube video req failed (id: ${video_id})`)
+		throw new Error(`youtube video req failed`)
 	}
-	if (json.pageInfo.totalResults === 0) {
-		throw new Error(`youtube video req is empty (id: ${video_id})`)
+	if (json.pageInfo.totalResults != video_ids.length) {
+		throw new Error(`youtube video req is missing all data`)
 	}
 
-	const inner = json.items[0]
-	return inner.snippet
+	// https://developers.google.com/youtube/v3/docs/videos#resource
+	return json.items.map((inner: any) => {
+		inner.snippet.id = inner.id // attach id
+		return inner.snippet
+	})
 }
 
 export async function meta_youtube_handle_to_id(handle: string): Promise<string | undefined> {
@@ -163,30 +171,42 @@ export async function pass_youtube_video_meta_youtube_video() {
 
 	const pc = new ProgressRef('youtube_video.meta.youtube_video')
 
-	await run_with_concurrency_limit(k, 5, pc, async ({ id }) => {
-		const meta = await meta_youtube_video(id)
+	for (let offset = 0; offset < k.length; offset += 50) {
+		const batch = k.slice(offset, offset + 50) // 50 is the maximum batch size
+		const ids = batch.map(v => v.id)
 
-		// find largest thumbnail and save
-		const thumb = largest_image(Object.values(meta.thumbnails))
+		const videos = await meta_youtube_video(ids)
 
-		if (thumb) {
-			db_images_append_url(schema.youtube_video, id, 'yt_thumbnail', thumb.url, thumb.width, thumb.height)
+		for (let i = 0; i < batch.length; i++) {
+			const meta = videos[i]
+
+			// rare?
+			if (batch[i].id != meta.id) {
+				throw new Error(`youtube video meta mismatch (batch[].id: ${batch[i].id}, meta.id: ${meta.id})`)
+			}
+			
+			const id = meta.id
+			const thumb = largest_image(Object.values(meta.thumbnails))
+
+			if (thumb) {
+				db_images_append_url(schema.youtube_video, id, 'yt_thumbnail', thumb.url, thumb.width, thumb.height)
+			}
+
+			// extract all URLs from the description
+			const url_set = links_from_text(meta.description)
+
+			db.update(schema.youtube_video)
+				.set({
+					channel_id: meta.channelId,
+					name: meta.title,
+					description: meta.description,
+				})
+				.where(sql`id = ${id}`)
+				.run()
+
+			db_links_append(schema.youtube_video, id, Array.from(url_set))
 		}
-
-		// extract all URLs from the description
-		const url_set = links_from_text(meta.description)
-
-		db.update(schema.youtube_video)
-			.set({
-				channel_id: meta.channelId,
-				name: meta.title,
-				description: meta.description,
-			})
-			.where(sql`id = ${id}`)
-			.run()
-
-		db_links_append(schema.youtube_video, id, Array.from(url_set))
-	})
+	}
 
 	pc.close()
 
@@ -321,6 +341,7 @@ type YoutubeChannel = {
 }
 
 type YoutubeVideo = {
+	id: string
 	publishedAt: string
 	channelId: string
 	title: string
