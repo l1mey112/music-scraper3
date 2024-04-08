@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm"
 import { run_with_concurrency_limit } from "../pass"
 import { ProgressRef } from "../server"
 import { meta_youtube_handle_to_id, youtube_channel_exists, youtube_video_exists } from "./youtube"
-import { db_backoff_sql, db_register_backoff } from "../db_misc"
+import { db_backoff_sql, db_backoff } from "../db_misc"
 import { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core"
 
 // matches ...99a7_q9XuZY）←｜→次作：（しばしまたれよ）
@@ -284,7 +284,7 @@ export async function pass_links_classify_strong() {
 
 				const channel_id = await meta_youtube_handle_to_id(classified.data)
 				if (!channel_id) {
-					db_register_backoff(schema.links, id, 'links.classify.strong')
+					db_backoff(schema.links, id, 'links.classify.strong')
 					return
 				}
 				classified.data = channel_id
@@ -361,7 +361,7 @@ export async function pass_all_extrapolate_from_links() {
 			const resp = await fetch(`https://open.spotify.com/oembed?url=${prefix}${data}`)
 
 			if (!resp.ok) {
-				db_register_backoff(schema.links, id, 'all.extrapolate.from_links')
+				db_backoff(schema.links, id, 'all.extrapolate.from_links')
 				delete rows[idx]
 			} else {
 				updated = true
@@ -441,7 +441,7 @@ export async function pass_links_classify_link_shorteners() {
 		// most likely req.ok isn't true as well
 		if (req.url === data) {
 			console.log(req.url, data)
-			db_register_backoff(schema.links, id, 'links.classify.link_shorteners')
+			db_backoff(schema.links, id, 'links.classify.link_shorteners')
 			return
 		}
 

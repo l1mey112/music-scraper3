@@ -2,7 +2,7 @@ import { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { ImageKind } from "../types";
 import * as schema from '../schema'
 import { db, db_ident_pk } from "../db";
-import { db_backoff_sql, db_fs_sharded_lazy_bunfile, db_register_backoff } from "../db_misc";
+import { db_backoff_sql, db_fs_sharded_lazy_bunfile, db_backoff } from "../db_misc";
 import { sql } from "drizzle-orm";
 import { run_with_concurrency_limit } from "../pass";
 import { ProgressRef } from "../server";
@@ -39,7 +39,7 @@ export async function pass_images_download_images() {
 		})
 
 		if (!resp.ok) {
-			db_register_backoff(schema.images, url, 'images.download.images')
+			db_backoff(schema.images, url, 'images.download.images')
 			return
 		}
 

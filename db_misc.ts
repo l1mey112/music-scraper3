@@ -64,13 +64,29 @@ export function db_links_append(pk: SQLiteTable, pk_id: string | number, urls: s
 		.run()
 }
 
-export function db_register_backoff(pk: SQLiteTable, pk_id: string | number, pass: PassIdentifier) {
+// TODO: maybe implement some exponential backoff?
+//       just a flashy feature though.
+
+const hours = 1000 * 60 * 60
+const days = hours * 24
+
+export enum Backoff {
+	Often     = 1 * days,
+	Latent    = 7 * days,
+	Complete  = 30 * days,
+	Error     = 120 * days,
+	Retry     = 2 * hours,
+}
+
+export function db_backoff(pk: SQLiteTable, pk_id: string | number, pass: PassIdentifier, backoff: Backoff = Backoff.Complete) {
 	const ident_fk = db_ident_pk(pk) + pk_id
 
 	emit_log(`pass <i>${pass}</i> failed for <i>${ident_fk}</i>`)
 
+	const now = new Date().getTime()
+
 	db.insert(schema.pass_backoff)
-		.values({ utc: Date.now(), ident: ident_fk, pass: db_hash(pass) })
+		.values({ issued: now, expire: now + backoff, ident: ident_fk, pass: db_hash(pass) })
 		.run()
 }
 
@@ -79,5 +95,6 @@ export function db_backoff_sql(pk: SQLiteTable, pk_column: SQLiteColumn | string
 
 	return sql<boolean>`(${ident} || ${pk_column}) not in (
 		select ${schema.pass_backoff.ident} from ${schema.pass_backoff} where ${schema.pass_backoff.pass} = ${db_hash(pass)}
+		and ${schema.pass_backoff.expire} > ${new Date().getTime()}
 	)`
 }

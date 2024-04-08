@@ -3,7 +3,7 @@ import { db } from "../db"
 import * as schema from '../schema'
 import { run_with_concurrency_limit } from "../pass"
 import { ProgressRef } from "../server"
-import { db_links_append } from "./../db_misc"
+import { Backoff, db_backoff, db_backoff_sql, db_links_append } from "./../db_misc"
 import { db_images_append_url } from "./images"
 import { ImageKind } from "../types"
 import { links_from_text } from "./links"
@@ -160,16 +160,18 @@ function youtube_id_from_url(video_url: string): string | undefined {
 
 // youtube_video.meta.youtube_video
 export async function pass_youtube_video_meta_youtube_video() {
+	const IDENT = 'youtube_video.meta.youtube_video'
+
 	const k = db.select({ id: schema.youtube_video.id })
 		.from(schema.youtube_video)
-		.where(sql`channel_id is null or name is null or description is null`)
+		.where(db_backoff_sql(schema.youtube_video, schema.youtube_video.id, IDENT))
 		.all()
 
 	if (k.length == 0) {
 		return
 	}
 
-	const pc = new ProgressRef('youtube_video.meta.youtube_video')
+	const pc = new ProgressRef(IDENT)
 
 	for (let offset = 0; offset < k.length; offset += 50) {
 		const batch = k.slice(offset, offset + 50) // 50 is the maximum batch size
@@ -205,6 +207,7 @@ export async function pass_youtube_video_meta_youtube_video() {
 				.run()
 
 			db_links_append(schema.youtube_video, id, Array.from(url_set))
+			db_backoff(schema.youtube_video, id, IDENT, Backoff.Complete)
 		}
 	}
 
@@ -216,6 +219,8 @@ export async function pass_youtube_video_meta_youtube_video() {
 // youtube_channel.extrapolate.from_channel_id
 // no need for async, its an instant operation
 export function pass_youtube_channel_extrapolate_from_channel_id() {
+	const IDENT = 'youtube_channel.extrapolate.from_channel_id'
+	
 	let updated = 0
 	const k = db.select({ channel_id: schema.youtube_video.channel_id })
 		.from(schema.youtube_video)

@@ -4,7 +4,7 @@ import * as schema from '../schema'
 import { ProgressRef } from "../server"
 import { run_with_concurrency_limit, run_with_throughput_limit } from "../pass"
 import { $ } from 'bun'
-import { db_backoff_sql, db_fs_hash_path, db_register_backoff } from "../db_misc"
+import { db_backoff_sql, db_fs_hash_path, db_backoff } from "../db_misc"
 
 // sources.classify.chromaprint
 export async function pass_sources_classify_chromaprint() {

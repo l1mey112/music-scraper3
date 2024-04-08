@@ -3,7 +3,7 @@ import { db } from "../db"
 import * as schema from '../schema'
 import { ProgressRef } from "../server"
 import { run_with_concurrency_limit } from "../pass"
-import { db_backoff_sql, db_register_backoff } from "../db_misc"
+import { db_backoff_sql, db_backoff } from "../db_misc"
 
 // links.extrapolate.from_karent_album
 export async function pass_links_extrapolate_from_karent_album() {
@@ -47,7 +47,7 @@ export async function pass_links_extrapolate_from_karent_album() {
 		// doesn't actually compute anything until much later
 		const resp = await fetch(`https://karent.jp/album/${data}`)
 		if (!resp.ok) {
-			db_register_backoff(schema.links, id, 'links.extrapolate.from_karent_album')
+			db_backoff(schema.links, id, 'links.extrapolate.from_karent_album')
 			return
 		}
 		html_extractor.transform(await resp.text())
@@ -120,7 +120,7 @@ export async function pass_links_extrapolate_from_linkcore() {
 
 		const resp = await fetch(`https://linkco.re/${data}`)
 		if (!resp.ok) {
-			db_register_backoff(schema.links, id, 'links.extrapolate.from_linkcore')
+			db_backoff(schema.links, id, 'links.extrapolate.from_linkcore')
 			return
 		}
 		html_extractor.transform(await resp.text())

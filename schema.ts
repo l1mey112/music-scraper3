@@ -42,13 +42,16 @@ export const youtube_channel = sqliteTable('youtube_channel', {
 })
 
 // pass backoff for metadata
+// its safe to clear these out, it'll just cause a re-fetch
+// there is no race conditions if you ran a cleanup pass at the end, you're at no risk
 export const pass_backoff = sqliteTable('pass_backoff', {
-	utc: integer('utc').notNull(),
+	issued: integer('issued').notNull(),
+	expire: integer('expire').notNull(),
 
 	ident: text('ident').$type<PIdent>().notNull(),
 	pass: integer('pass').$type<LiteralHash>().notNull(), // wyhash integer
 }, (t) => ({
-	pidx: index("pass_backoff.ident_idx").on(t.ident),
+	pidx: index("pass_backoff.full_idx").on(t.ident, t.expire, t.pass),
 }))
 
 // persistent store
@@ -62,12 +65,11 @@ export const thirdparty_store = sqliteTable('thirdparty:store', {
 
 export const links = sqliteTable('links', {
 	id: integer('id').primaryKey(),
-	derived_from: integer('derived_from'), // foreign key to links.id
 	ident: text('ident').$type<PIdent>().notNull(),
 	kind: text('kind').notNull(),
 	data: text('data').notNull(),
 }, (t) => ({
-	pidx: index("links.ident_idx").on(t.ident),
+	pidx: index("links.ident_idx").on(t.ident, t.kind, t.data),
 }))
 
 //          | hash | null hash
@@ -88,6 +90,8 @@ export const links = sqliteTable('links', {
 //       if it fails, no backoff just delete the entry
 //       check if starts with https:// or http:// (nanoid has no //)
 
+// TODO: definitely change this
+
 // relies on rowid
 export const images = sqliteTable('images', {
 	hash: text('hash').$type<FSHash>(),
@@ -97,9 +101,7 @@ export const images = sqliteTable('images', {
 	width: integer('width').notNull(),
 	height: integer('height').notNull(),
 }, (t) => ({
-	pkidx0: index("images.pkidx0").on(t.hash), // ????
-	pkidx1: index("images.pkidx1").on(t.url),  // ????
-	pidx: index("images.ident_idx").on(t.ident),
+	pkidx: index("images.ident_idx").on(t.ident, t.hash, t.url),
 }))
 
 // `width` and `height` are optional, they are only present in video sources
@@ -110,6 +112,9 @@ export const images = sqliteTable('images', {
 //
 // compression of a chromaprint is a BAD idea, the entropy is already way too high
 // i tried, you'll save 100 bytes in 4000, not worth it
+
+// TODO: look into indices, i doubt it'll help chromaprint matching
+//       but on duration it'll definitely help since we're doing a range query
 
 // a source is a video/audio file, always containing some form of audio
 // WITHOUT-ROWID: sources
