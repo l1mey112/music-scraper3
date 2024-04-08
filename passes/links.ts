@@ -6,6 +6,7 @@ import { run_with_concurrency_limit } from "../pass"
 import { ProgressRef } from "../server"
 import { meta_youtube_handle_to_id, youtube_channel_exists, youtube_video_exists } from "./youtube"
 import { db_backoff_sql, db_register_backoff } from "../db_misc"
+import { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core"
 
 // matches ...99a7_q9XuZY）←｜→次作：（しばしまたれよ）
 //                       ^^^^^^^^^^^^^^^^^^^^^^^^^ very incorrect
@@ -309,28 +310,41 @@ export async function pass_links_classify_strong() {
 
 // all.extrapolate.from_links
 export async function pass_all_extrapolate_from_links() {
-	// select from links where those identifiers don't show up in the tabls
+	// only extrapolate certain things that will help us widen
+	// expand vertically, going up the chain to parent articles (artist ids etc)
+	// not horizontally, going to entirely different people	that don't matter
+
+	// we'll extract things that don't matter, but try to limit it.
+	// inside a youtube video we obviously won't extract channels and videos
+	// from the description, since we know where the video is from already.
+	// though extract spotify links and others, they're not as obvious
 
 	let updated = false
 	const pc = new ProgressRef('all.extrapolate.from_links')
 
-	// substr() is 1 index based are you fucking kidding me
+	// select from links where those identifiers don't show up in the tables
 
-	const youtube_videos = db.select({ id: schema.links.id, data: schema.links.data })
-		.from(schema.links)
-		.where(sql`${schema.links.kind} = 'youtube_video_id'
-			and ${db_backoff_sql(schema.links, schema.links.id, 'all.extrapolate.from_links')}
-			and ${schema.links.data} not in (select ${schema.youtube_video.id} from ${schema.youtube_video})
-		`)
-		.all()
-
-	const youtube_channels = db.select({ id: schema.links.id, data: schema.links.data })
+	/* const youtube_channels = db.select({ id: schema.links.id, data: schema.links.data })
 		.from(schema.links)
 		.where(sql`${schema.links.kind} = 'youtube_channel_id'
 			and ${db_backoff_sql(schema.links, schema.links.id, 'all.extrapolate.from_links')}
 			and ${schema.links.data} not in (select ${schema.youtube_channel.id} from ${schema.youtube_channel})
 		`)
-		.all()
+		.all() */
+
+	function links_select(link_kind: string, notexisting_ft: SQLiteTable, notexisting_fk: SQLiteColumn) {
+		return db.select({ id: schema.links.id, data: schema.links.data })
+			.from(schema.links)
+			.where(sql`${schema.links.kind} = ${link_kind}
+				and ${db_backoff_sql(schema.links, schema.links.id, 'all.extrapolate.from_links')}
+				and ${schema.links.data} not in (select ${notexisting_fk} from ${notexisting_ft})
+			`)
+			.all()
+	}
+
+	const spotify_artists = links_select('spotify_artist_id', schema.spotify_artist, schema.spotify_artist.id)
+	const spotify_albums = links_select('spotify_album_id', schema.spotify_album, schema.spotify_album.id)
+	const spotify_tracks = links_select('spotify_track_id', schema.spotify_track, schema.spotify_track.id)
 
 	// can't use sets to prune data since we need to preserve ids to attach backoff
 	// also can't use sets because there is no value equality for objects
@@ -338,40 +352,49 @@ export async function pass_all_extrapolate_from_links() {
 	// using delete on an array and introducing holes isn't actually that bad
 	// ill need holes to preserve the index
 
-	await run_with_concurrency_limit(Array.from(youtube_videos.entries()), 5, pc, async ([idx, { id, data }]) => {
-		if (!await youtube_video_exists(data)) {
-			db_register_backoff(schema.links, id, 'all.extrapolate.from_links')
-			delete youtube_videos[idx]
-		} else {
-			updated = true
-		}
-	})
+	async function spotify_oembed_test(rows: { id: number, data: string }[], prefix: string) {
+		await run_with_concurrency_limit(Array.from(rows.entries()), 5, pc, async ([idx, { id, data }]) => {
+			// highly optimised for the case where the link is valid.
+			// if the link is invalid, we will hang the shit out of the servers
+			// and they'll actually time out after 5 whole seconds.
+			// nice oversight spotify.
+			const resp = await fetch(`https://open.spotify.com/oembed?url=${prefix}${data}`)
 
-	await run_with_concurrency_limit(Array.from(youtube_channels.entries()), 5, pc, async ([idx, { id, data }]) => {
-		if (!await youtube_channel_exists(data)) {
-			db_register_backoff(schema.links, id, 'all.extrapolate.from_links')
-			delete youtube_channels[idx]
-		} else {
-			updated = true
-		}
-	})
+			if (!resp.ok) {
+				db_register_backoff(schema.links, id, 'all.extrapolate.from_links')
+				delete rows[idx]
+			} else {
+				updated = true
+			}
+		})
 
-	// remove duplicates
-	const youtube_videos_unique = new Set(youtube_videos.filter(it => it).map(it => it.data))
-	const youtube_channels_unique = new Set(youtube_channels.filter(it => it).map(it => it.data))
+		const set = new Set(rows.filter(it => it).map(it => it.data))
+		
+		return Array.from(set)
+	}
 
-	if (youtube_videos_unique.size > 0) {
-		db.insert(schema.youtube_video)
-			.values(Array.from(youtube_videos_unique).map(it => ({ id: it })))
+	const nspotify_artists = await spotify_oembed_test(spotify_artists, "https://open.spotify.com/artist/")
+	const nspotify_albums = await spotify_oembed_test(spotify_albums, "https://open.spotify.com/album/")
+	const nspotify_tracks = await spotify_oembed_test(spotify_tracks, "https://open.spotify.com/track/")
+
+	if (nspotify_artists.length > 0) {
+		db.insert(schema.spotify_artist)
+			.values(nspotify_artists.map(it => ({ id: it })))
 			.run()
 	}
-	
-	if (youtube_channels_unique.size > 0) {
-		db.insert(schema.youtube_channel)
-			.values(Array.from(youtube_channels_unique).map(it => ({ id: it })))
+
+	if (nspotify_albums.length > 0) {
+		db.insert(schema.spotify_album)
+			.values(nspotify_albums.map(it => ({ id: it })))
 			.run()
 	}
-	
+
+	if (nspotify_tracks.length > 0) {
+		db.insert(schema.spotify_track)
+			.values(nspotify_tracks.map(it => ({ id: it })))
+			.run()
+	}
+
 	pc.close()
 
 	return updated

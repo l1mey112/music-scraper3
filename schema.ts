@@ -1,12 +1,26 @@
 import { index, sqliteTable, text, integer, unique, blob, real } from "drizzle-orm/sqlite-core";
-import { LiteralHash, ImageKind, PIdent, YoutubeChannelId, YoutubeVideoId, FSHash } from "./types";
+import { LiteralHash, ImageKind, PIdent, YoutubeChannelId, YoutubeVideoId, FSHash, SpotifyArtistId, SpotifyAlbumId, SpotifyTrackId } from "./types";
 
 // .references(() => youtube_channel.id),
 // these are no-ops in sqlite, they don't create indexes
 // a default index is created on primary keys anyway
 
-export const track = sqliteTable('track', {
-	id: integer('id').primaryKey(),
+export const spotify_artist = sqliteTable('spotify_artist', {
+	id: text('id').$type<SpotifyArtistId>().primaryKey(),
+
+	//name: text('name'),
+})
+
+export const spotify_album = sqliteTable('spotify_album', {
+	id: text('id').$type<SpotifyAlbumId>().primaryKey(),
+
+	//name: text('name'),
+})
+
+export const spotify_track = sqliteTable('spotify_track', {
+	id: text('id').$type<SpotifyTrackId>().primaryKey(),
+
+	//name: text('name'),
 })
 
 // WITHOUT-ROWID: youtube_video

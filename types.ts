@@ -4,6 +4,9 @@ export type Override<T1, T2> = Omit<T1, keyof T2> & T2;
 
 export type PIdent = string // permanent identifier
 
+export type SpotifyArtistId = string
+export type SpotifyAlbumId = string
+export type SpotifyTrackId = string
 export type YoutubeVideoId = string
 export type YoutubeChannelId = string
 

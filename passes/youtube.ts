@@ -358,3 +358,23 @@ type YoutubeVideo = {
 		description: string
 	}
 }
+
+// https://stackoverflow.com/questions/18953499/youtube-api-to-fetch-all-videos-on-a-channel
+
+// to extract uploads, take youtube ID and change UC to UU
+//
+//       reol channel id: UCB6pJFaFByws3dQj4AdLdyA
+//                        ^^
+// reol uploads playlist: UUB6pJFaFByws3dQj4AdLdyA
+//                        ^^
+//
+// https://www.youtube.com/playlist?list=UUB6pJFaFByws3dQj4AdLdyA
+//                                       ^^^^^^^^^^^^^^^^^^^^^^^^
+
+// https://yt4.lemnoslife.com/noKey/playlistItems
+//     ?part=contentDetails
+//     &playlistId=UUB6pJFaFByws3dQj4AdLdyA
+//     &maxResults=50
+
+// https://developers.google.com/youtube/v3/docs/playlistItems/list
+// returns next page token, then go ?pageToken=...

@@ -23,7 +23,7 @@ const passes: PassElement[] = [
 			{ name: 'links.classify.strong', fn: pass_links_classify_strong },
 			{ name: 'links.extrapolate.from_karent_album', fn: pass_links_extrapolate_from_karent_album },
 			{ name: 'links.extrapolate.from_linkcore', fn: pass_links_extrapolate_from_linkcore },
-			// { name: 'all.extrapolate.from_links', fn: pass_all_extrapolate_from_links },
+			{ name: 'all.extrapolate.from_links', fn: pass_all_extrapolate_from_links },
 		],
 	},
 	{ name: 'images.download.images', fn: pass_images_download_images },

@@ -20,7 +20,7 @@ export async function pass_sources_classify_chromaprint() {
 	const pc = new ProgressRef('sources.classify.chromaprint')
 
 	await run_with_concurrency_limit(k, 10, pc, async ({ hash }) => {
-		const fpcalc = await $`fpcalc -raw -json ${db_fs_hash_path(hash)}`.quiet()
+		const fpcalc = await $`fpcalc -algorithm 2 -raw -json ${db_fs_hash_path(hash)}`.quiet()
 
 		type FpCalc = {
 			duration: number
