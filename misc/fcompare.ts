@@ -3,7 +3,7 @@ import { $ } from 'bun'
 async function extract_fingerprint(fp: string): Promise<Uint32Array> {
 	type FpCalcRawJson = { duration: number, fingerprint: number[] }
 	
-	const fpcalc = await $`fpcalc -rate 11025 -raw -json ${fp}`.quiet()
+	const fpcalc = await $`fpcalc -algorithm 2 -rate 11025 -raw -json ${fp}`.quiet()
 	if (fpcalc.exitCode !== 0) {
 		throw new Error(`fpcalc failed: ${fpcalc.stderr}`)
 	}
@@ -147,6 +147,13 @@ function fingerprint_compare2(fp0: Uint32Array, fp1: Uint32Array): number {
 const glob = new Bun.Glob("*.{mp3,webm}")
 const files = await Array.fromAsync(glob.scan())
 
+import { Database } from 'bun:sqlite'
+
+const sqlite: Database = new Database(':memory:')
+sqlite.loadExtension("../hdist")
+
+const query = sqlite.prepare<{ score: number }, any>("select acoustid_compare2(?, ?, ?) as score")
+
 // make files^2 comparisons
 for (const file0 of files) {
 	for (const file1 of files) {
@@ -159,13 +166,18 @@ for (const file0 of files) {
 			extract_fingerprint(file1),
 		])
 
-		const fpc0 = fingerprint_compare0(fp0, fp1)
+		/* const fpc0 = fingerprint_compare0(fp0, fp1)
 		const fpc1 = fingerprint_compare1(fp0, fp1)
 		const fpc2 = fingerprint_compare2(fp0, fp1)
 
 		console.log(`${file0} vs ${file1}:`)
 		console.log(`\tv0`, fpc0.toPrecision(4))
 		console.log(`\tv1`, fpc1.toPrecision(4))
-		console.log(`\tv2`, fpc2.toPrecision(4))
+		console.log(`\tv2`, fpc2.toPrecision(4)) */
+
+		console.log(`${file0}`)
+		console.log(`${file1}`)
+		const fp = query.get(new Uint8Array(fp0.buffer), new Uint8Array(fp1.buffer), 80)!
+		console.log(`\t`, fp.score)
 	}
 }

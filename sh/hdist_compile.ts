@@ -1,3 +1,5 @@
+#!/usr/bin/env bun
+
 // auto recompile script for hdist sqlite extension
 
 import { $ } from 'bun'
