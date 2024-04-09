@@ -10,6 +10,8 @@ const sqlite: Database = new Database('db.sqlite', { create: false, readwrite: t
 // https://phiresky.github.io/blog/2020/sqlite-performance-tuning/
 sqlite.exec("pragma journal_mode = WAL;")
 sqlite.exec("pragma synchronous = normal;") // safe with WAL
+sqlite.exec("pragma temp_store = memory;")
+sqlite.exec("pragma auto_vacuum = incremental;") // TODO: needs to be set at db creation before tables, so why call it here?
 sqlite.loadExtension("./hdist.so") // hdist.c
 
 export const db: BunSQLiteDatabase<typeof schema> = drizzle(sqlite, { schema })
@@ -19,7 +21,7 @@ export function db_close() {
 	sqlite.exec("pragma journal_mode = DELETE;") // delete wal
 	sqlite.exec("pragma vacuum;") // vacuum
 	sqlite.exec("pragma optimize;") // optimize
-	sqlite.exec("pragma analysis_limit=1000;") // 1000 iterations
+	sqlite.exec("pragma analysis_limit=4000;") // 4000 iterations
 	sqlite.close() // close the db
 	console.log('db: closed')
 }

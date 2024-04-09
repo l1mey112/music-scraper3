@@ -74,7 +74,6 @@ export const thirdparty_store = sqliteTable('thirdparty:store', {
 	data: text('data', { mode: 'json' }).notNull(),
 })
 
-// ~~rowid simplifies deletions~~
 // WITHOUT-ROWID: links
 export const links = sqliteTable('links', {
 	ident: text('ident').$type<PIdent>().notNull(),
@@ -121,5 +120,5 @@ export const sources = sqliteTable('sources', {
 	width: integer('width'),
 	height: integer('height'),
 }, (t) => ({
-	pidx: index("sources.ident_idx").on(t.ident),
+	pidx: index("sources.idx").on(t.ident, t.duration_s, t.chromaprint),
 }))

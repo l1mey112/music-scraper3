@@ -29,8 +29,8 @@ const passes: PassElement[] = [
 		]
 	},
 	{ name: 'images.download.url_to_hash', fn: pass_images_download_url_to_hash },
-	/* { name: 'sources.download.from_youtube_video', fn: pass_sources_download_from_youtube_video },
-	{ name: 'sources.classify.chromaprint', fn: pass_sources_classify_chromaprint }, */
+	{ name: 'sources.download.from_youtube_video', fn: pass_sources_download_from_youtube_video },
+	{ name: 'sources.classify.chromaprint', fn: pass_sources_classify_chromaprint },
 ]
 
 const TRIP_COUNT_MAX = 10
