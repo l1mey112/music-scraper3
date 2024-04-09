@@ -187,6 +187,8 @@ export async function pass_youtube_video_meta_youtube_video() {
 				throw new Error(`youtube video meta mismatch (batch[].id: ${batch[i].id}, meta.id: ${meta.id})`)
 			}
 			
+			// youtube provides many different thumbnails, and we may choose a thumbnail that isn't actually the thumbnail
+			// though the largest one is probably the right one...
 			const id = meta.id
 			const thumb = largest_image(Object.values(meta.thumbnails))
 
@@ -296,7 +298,15 @@ export async function pass_youtube_channel_meta_youtube_channel() {
 			.where(sql`id = ${id}`)
 			.run()
 
-		const links = channel.about.links.map(({ url }) => url)
+		const links = channel.about.links.map(({ url }) => {
+			// sometimes people paste links without https://
+			if (!url.startsWith('http://') && !url.startsWith('https://')) {
+				url = 'https://' + url
+			}
+
+			return url
+		})
+
 		db_links_append(schema.youtube_channel, id, links)
 		db_backoff(schema.youtube_channel, id, DIDENT, Backoff.Complete)
 	})

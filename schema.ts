@@ -84,36 +84,19 @@ export const links = sqliteTable('links', {
 	pidxuni: primaryKey({ columns: [t.ident, t.kind, t.data] }),
 }))
 
-//          | hash | null hash
-// ---------+------|-----------
-// url      |  o   |  o
-// null url |  o   |  x
+// hash can either be an FSHash or a URL gated behind a pass to defer downloading
+// if it fails, no backoff just delete the entry
+// check if starts with https:// or http:// (nanoid has no //)
 
-// `url` is the backoff PK
-
-// sources don't have `kind` or `url`, possibly deprecate `url` in images
-// though it's useful for batching in another pass since one single article
-// can have a LOT of images (> 5 possibly)
-//
-// making `hash` non null would allow a proper PK and no row id table
-// please look into this.
-
-// TODO: tbh make `hash` a URL then gate it behind a pass
-//       if it fails, no backoff just delete the entry
-//       check if starts with https:// or http:// (nanoid has no //)
-
-// TODO: definitely change this
-
-// relies on rowid
+// WITHOUT-ROWID: images
 export const images = sqliteTable('images', {
-	hash: text('hash').$type<FSHash>(),
-	url: text('url'),
+	hash: text('hash').$type<FSHash>().primaryKey(),
 	ident: text('ident').$type<PIdent>().notNull(),
 	kind: text('kind').$type<ImageKind>().notNull(),
 	width: integer('width').notNull(),
 	height: integer('height').notNull(),
 }, (t) => ({
-	pkidx: index("images.ident_idx").on(t.ident, t.hash, t.url),
+	pkidx: index("images.ident_idx").on(t.ident, t.hash),
 }))
 
 // `width` and `height` are optional, they are only present in video sources
@@ -131,7 +114,7 @@ export const images = sqliteTable('images', {
 // a source is a video/audio file, always containing some form of audio
 // WITHOUT-ROWID: sources
 export const sources = sqliteTable('sources', {
-	hash: text('hash').primaryKey().$type<FSHash>(),
+	hash: text('hash').$type<FSHash>().primaryKey(),
 	ident: text('ident').$type<PIdent>().notNull(),
 	duration_s: real('duration_s').notNull(), // not entirely accurate, but close enough
 	chromaprint: blob('chromaprint').$type<Uint8Array>(),

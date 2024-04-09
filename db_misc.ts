@@ -19,6 +19,10 @@ if (!existsSync(media_db)) {
 }
 
 export function db_fs_hash_path(hash: FSHash): string {
+	// rare
+	if (hash.startsWith("https://") || hash.startsWith("http://")) {
+		throw new Error("hash is a url")
+	}
 	const shard = (hash as unknown as string).slice(0, 2)
 	return `${media_db}/${shard}/${hash}`
 }

@@ -174,11 +174,6 @@ const weak_classify_links: WeakClassifyLinks = {
 }
 
 function link_classify(url: string, classify_links: ClassifyBlock): { kind: string, data: string } | undefined {
-	// sometimes people paste links without https://
-	if (!url.startsWith('http://') && !url.startsWith('https://')) {
-		url = 'https://' + url
-	}
-
 	const url_obj = new URL(url)
 	const url_tld = tldts_parse(url)
 

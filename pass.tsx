@@ -4,7 +4,7 @@ import { MaybePromise, PassIdentifier } from "./types"
 
 import { pass_youtube_channel_extrapolate_from_channel_id, pass_youtube_channel_meta_youtube_channel, pass_youtube_video_meta_youtube_video } from "./passes/youtube"
 import { pass_all_extrapolate_from_links, pass_links_classify_link_shorteners, pass_links_classify_strong, pass_links_classify_weak } from "./passes/links"
-import { pass_images_download_images } from "./passes/images"
+import { pass_images_download_url_to_hash } from "./passes/images"
 import { pass_sources_download_from_youtube_video } from "./passes/youtube_download"
 import { pass_sources_classify_chromaprint } from "./passes/chromaprint"
 import { pass_links_extrapolate_from_linkcore } from "./passes/links_distributors"
@@ -28,8 +28,8 @@ const passes: PassElement[] = [
 			},
 		]
 	},
-	/* { name: 'images.download.images', fn: pass_images_download_images },
-	{ name: 'sources.download.from_youtube_video', fn: pass_sources_download_from_youtube_video },
+	{ name: 'images.download.url_to_hash', fn: pass_images_download_url_to_hash },
+	/* { name: 'sources.download.from_youtube_video', fn: pass_sources_download_from_youtube_video },
 	{ name: 'sources.classify.chromaprint', fn: pass_sources_classify_chromaprint }, */
 ]
 
