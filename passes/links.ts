@@ -7,6 +7,20 @@ import { ProgressRef } from "../server"
 import { meta_youtube_handle_to_id, youtube_channel_exists, youtube_video_exists } from "./youtube"
 import { db_backoff_sql, db_backoff } from "../db_misc"
 import { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core"
+import { Link } from "../types"
+
+export function link_delete(link: Link) {
+	db.delete(schema.links)
+		.where(sql`data = ${link.data} and ident = ${link.ident} and kind = ${link.kind}`)
+		.run()
+}
+
+export function link_insert(link: Link | Link[]) {
+	db.insert(schema.links)
+		.values(link as any) // typescript only allows one or the other, to drizzle it doesn't matter
+		.onConflictDoNothing()
+		.run()
+}
 
 // matches ...99a7_q9XuZY）←｜→次作：（しばしまたれよ）
 //                       ^^^^^^^^^^^^^^^^^^^^^^^^^ very incorrect
@@ -34,7 +48,7 @@ export function links_from_text(text: string): Set<string> {
 
 type strin2 = `${string}/${string}`
 
-type Link =
+type LinkObj =
 	| { kind: 'youtube_video_id',     data: string } // base64
 	| { kind: 'youtube_channel_id',   data: string } // base64 (normalised from multiple sources, youtube.com/@MitsumoriMusic as well)
 	| { kind: 'youtube_playlist_id',  data: string } // base64 - youtube.com/playlist?list={}
@@ -100,7 +114,7 @@ type LinkMatch = {
 
 type ClassifyBlock = Record<Exclude<string, "unknown">, LinkMatch[]>
 
-type WeakClassifyLinks = Record<Exclude<Link["kind"], "unknown">, LinkMatch[]>
+type WeakClassifyLinks = Record<Exclude<LinkObj["kind"], "unknown">, LinkMatch[]>
 const weak_classify_links: WeakClassifyLinks = {
 	'youtube_video_id': [
 		{ domain: 'youtube.com', r: /\/watch/, m: ['v'] },
@@ -216,7 +230,7 @@ function link_classify(url: string, classify_links: ClassifyBlock): { kind: stri
 				}
 			}
 
-			return { kind: kind as Link["kind"], data: match_idents.join('/') }
+			return { kind: kind as LinkObj["kind"], data: match_idents.join('/') }
 		}
 	}
 
@@ -225,27 +239,27 @@ function link_classify(url: string, classify_links: ClassifyBlock): { kind: stri
 
 // links.classify.weak
 export function pass_links_classify_weak() {
-	let updated = 0
-	const k = db.select({ id: schema.links.id, data: schema.links.data })
+	let updated = false
+	const k = db.select()
 		.from(schema.links)
 		.where(sql`kind = 'unknown'`)
 		.all()
-	
-	for (const { id, data } of k) {
-		const classified = link_classify(data, weak_classify_links)
+
+	for (const link of k) {
+		const classified = link_classify(link.data, weak_classify_links)
 		if (!classified) {
 			continue
 		}
 
-		// should probably intern these
-		db.update(schema.links)
-			.set({ kind: classified.kind, data: classified.data })
-			.where(sql`id = ${id}`)
-			.run()
-		updated++
+		link_delete(link)
+		link.kind = classified.kind
+		link.data = classified.data
+		link_insert(link)
+
+		updated = true
 	}
 
-	return updated > 0
+	return updated
 }
 
 // https://www.youtube.com/c/r3musicboxenglish/playlists
@@ -262,20 +276,21 @@ const strong_classify_links_helper: ClassifyBlock = {
 
 // links.classify.strong
 export async function pass_links_classify_strong() {
-	let updated = 0
-	let k = db.select({ id: schema.links.id, data: schema.links.data })
+	let updated = false
+	let k = db.select()
 		.from(schema.links)
-		.where(sql`kind = 'unknown' and ${db_backoff_sql(schema.links, schema.links.id, 'links.classify.strong')}`)
+		.where(sql`kind = 'unknown'`)
 		.all()
 
 	const pc = new ProgressRef('links.classify.strong')
 
-	await run_with_concurrency_limit(k, 5, pc, async ({ id, data }) => {
-		const classified = link_classify(data, strong_classify_links_helper)
+	await run_with_concurrency_limit(k, 5, pc, async (link) => {
+		const classified = link_classify(link.data, strong_classify_links_helper)
 		if (!classified) {
 			return
 		}
 
+		link_delete(link)
 		switch (classified.kind) {
 			case 'youtube_channel_handle': {
 				if (!classified.data.startsWith('@')) {
@@ -284,116 +299,63 @@ export async function pass_links_classify_strong() {
 
 				const channel_id = await meta_youtube_handle_to_id(classified.data)
 				if (!channel_id) {
-					db_backoff(schema.links, id, 'links.classify.strong')
 					return
 				}
-				classified.data = channel_id
-				classified.kind = 'youtube_channel_id'
+				link.data = channel_id
+				link.kind = 'youtube_channel_id'
 				break
-			}
-			default: {
-				return
 			}
 		}
 
-		db.update(schema.links)
-			.set({ kind: classified.kind, data: classified.data })
-			.where(sql`id = ${id}`)
-			.run()
-		updated++
+		link_insert(link)
+		updated = true
 	})
 
 	pc.close()
 
-	return updated > 0
+	return updated
 }
 
 // all.extrapolate.from_links
 export async function pass_all_extrapolate_from_links() {
-	// only extrapolate certain things that will help us widen
-	// expand vertically, going up the chain to parent articles (artist ids etc)
-	// not horizontally, going to entirely different people	that don't matter
-
-	// we'll extract things that don't matter, but try to limit it.
-	// inside a youtube video we obviously won't extract channels and videos
-	// from the description, since we know where the video is from already.
-	// though extract spotify links and others, they're not as obvious
-
 	let updated = false
 	const pc = new ProgressRef('all.extrapolate.from_links')
 
-	// select from links where those identifiers don't show up in the tables
-
-	/* const youtube_channels = db.select({ id: schema.links.id, data: schema.links.data })
-		.from(schema.links)
-		.where(sql`${schema.links.kind} = 'youtube_channel_id'
-			and ${db_backoff_sql(schema.links, schema.links.id, 'all.extrapolate.from_links')}
-			and ${schema.links.data} not in (select ${schema.youtube_channel.id} from ${schema.youtube_channel})
-		`)
-		.all() */
-
-	function links_select(link_kind: string, notexisting_ft: SQLiteTable, notexisting_fk: SQLiteColumn) {
-		return db.select({ id: schema.links.id, data: schema.links.data })
+	async function link_test(table_to: SQLiteTable, link_kind: string, prefix: string) {
+		const rows = db.select()
 			.from(schema.links)
-			.where(sql`${schema.links.kind} = ${link_kind}
-				and ${db_backoff_sql(schema.links, schema.links.id, 'all.extrapolate.from_links')}
-				and ${schema.links.data} not in (select ${notexisting_fk} from ${notexisting_ft})
-			`)
+			.where(sql`${schema.links.kind} = ${link_kind} and ${schema.links.data} not in (select id from ${table_to})`)
 			.all()
-	}
 
-	const spotify_artists = links_select('spotify_artist_id', schema.spotify_artist, schema.spotify_artist.id)
-	const spotify_albums = links_select('spotify_album_id', schema.spotify_album, schema.spotify_album.id)
-	const spotify_tracks = links_select('spotify_track_id', schema.spotify_track, schema.spotify_track.id)
-
-	// can't use sets to prune data since we need to preserve ids to attach backoff
-	// also can't use sets because there is no value equality for objects
-
-	// using delete on an array and introducing holes isn't actually that bad
-	// ill need holes to preserve the index
-
-	async function spotify_oembed_test(rows: { id: number, data: string }[], prefix: string) {
-		await run_with_concurrency_limit(Array.from(rows.entries()), 5, pc, async ([idx, { id, data }]) => {
-			// highly optimised for the case where the link is valid.
-			// if the link is invalid, we will hang the shit out of the servers
-			// and they'll actually time out after 5 whole seconds.
-			// nice oversight spotify.
-			const resp = await fetch(`https://open.spotify.com/oembed?url=${prefix}${data}`)
+		await run_with_concurrency_limit(rows, 5, pc, async (link) => {
+			const resp = await fetch(`${prefix}${link.data}`)
 
 			if (!resp.ok) {
-				db_backoff(schema.links, id, 'all.extrapolate.from_links')
-				delete rows[idx]
-			} else {
-				updated = true
+				link_delete(link) // delete links if they don't exist
+				return
 			}
+
+			// keep link, insert new data
+			db.insert(table_to)
+				.values({ id: link.data })
+				.run()
+
+			updated = true
 		})
-
-		const set = new Set(rows.filter(it => it).map(it => it.data))
-		
-		return Array.from(set)
 	}
 
-	const nspotify_artists = await spotify_oembed_test(spotify_artists, "https://open.spotify.com/artist/")
-	const nspotify_albums = await spotify_oembed_test(spotify_albums, "https://open.spotify.com/album/")
-	const nspotify_tracks = await spotify_oembed_test(spotify_tracks, "https://open.spotify.com/track/")
+	// karent doesn't provide easier ways to test for existence
+	// they have zero API, just entirely simple HTML+JS+CSS website
 
-	if (nspotify_artists.length > 0) {
-		db.insert(schema.spotify_artist)
-			.values(nspotify_artists.map(it => ({ id: it })))
-			.run()
-	}
+	// for spotify, using oembed is highly optimised for the case where the link is valid.
+	// if the link is invalid, we will hang the shit out of the servers and they'll actually
+	// time out after 5 whole seconds. nice oversight spotify.
 
-	if (nspotify_albums.length > 0) {
-		db.insert(schema.spotify_album)
-			.values(nspotify_albums.map(it => ({ id: it })))
-			.run()
-	}
-
-	if (nspotify_tracks.length > 0) {
-		db.insert(schema.spotify_track)
-			.values(nspotify_tracks.map(it => ({ id: it })))
-			.run()
-	}
+	await link_test(schema.spotify_artist, 'spotify_artist_id', "https://open.spotify.com/oembed?url=https://open.spotify.com/artist/")
+	await link_test(schema.spotify_album, 'spotify_album_id', "https://open.spotify.com/oembed?url=https://open.spotify.com/album/")
+	await link_test(schema.spotify_track, 'spotify_track_id', "https://open.spotify.com/oembed?url=https://open.spotify.com/track/")
+	await link_test(schema.karent_album, 'karent_album_id', "https://karent.jp/album/")
+	await link_test(schema.karent_artist, 'karent_artist_id', "https://karent.jp/artist/")
 
 	pc.close()
 
@@ -414,12 +376,15 @@ const link_shorteners_classify: ClassifyBlock = {
 	'tunecore': [ { domain: 'tunecore.co.jp', r: /\/to\// } ],
 }
 
+// if you're updating a link in place, you need to delete the link then insert it.
+// this will play nice with the unique index on it
+
 // links.classify.link_shorteners
 export async function pass_links_classify_link_shorteners() {
 	let updated = 0
-	let k = db.select({ id: schema.links.id, data: schema.links.data })
+	let k = db.select()
 		.from(schema.links)
-		.where(sql`kind = 'unknown' and ${db_backoff_sql(schema.links, schema.links.id, 'links.classify.link_shorteners')}`)
+		.where(sql`kind = 'unknown'`)
 		.all()
 
 	// match only the ones that are in the list
@@ -427,30 +392,25 @@ export async function pass_links_classify_link_shorteners() {
 
 	const pc = new ProgressRef('links.classify.link_shorteners')
 
-	await run_with_concurrency_limit(k, 5, pc, async ({ id, data }) => {
-		const req = await fetch(data)
+	await run_with_concurrency_limit(k, 5, pc, async (link) => {
+		const req = await fetch(link.data)
 
 		// even if it passes through the shortener
 		// 1. it might not be a valid link
 		// 2. the server might not support HEAD requests (though supporting GET just fine)
 		//    some servers return 404 on HEAD (200 for GET) but URL is intact
+		// -  don't req HEAD, just req GET. annoying that they aren't standards compliant
 
-		// don't req HEAD, just req GET. annoying that they aren't standards compliant
+		link_delete(link)
 
 		// no redirect
 		// most likely req.ok isn't true as well
-		if (req.url === data) {
-			console.log(req.url, data)
-			db_backoff(schema.links, id, 'links.classify.link_shorteners')
+		if (req.url === link.data) {
 			return
 		}
 
-		// just go ahead and insert it back in regardless
-
-		db.update(schema.links)
-			.set({ data: req.url })
-			.where(sql`id = ${id}`)
-			.run()
+		link.data = req.url
+		link_insert(link)
 		updated++
 	})
 

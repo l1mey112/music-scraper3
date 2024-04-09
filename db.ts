@@ -36,8 +36,9 @@ export function db_ident_pk(table: SQLiteTable) {
 		case schema.youtube_video:   return 'yv/'
 		case schema.youtube_channel: return 'yc/'
 		case schema.images:          return 'im/'
-		case schema.links:           return 'li/'
 		case schema.sources:         return 'so/'
+		case schema.karent_album:    return 'kl/'
+		case schema.karent_artist:   return 'ka/'
 		default: {
 			throw new Error(`unknown table ${table}`)
 		}

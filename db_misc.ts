@@ -1,4 +1,4 @@
-import { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
+import { SQLiteColumn, SQLiteTable, SQLiteTableWithColumns } from 'drizzle-orm/sqlite-core'
 import { FSHash, PassIdentifier } from "./types"
 import { BunFile } from "bun";
 import { nanoid } from "./nanoid";
@@ -78,10 +78,10 @@ export enum Backoff {
 	Retry     = 2 * hours,
 }
 
-export function db_backoff(pk: SQLiteTable, pk_id: string | number, pass: PassIdentifier, backoff: Backoff = Backoff.Complete) {
+export function db_backoff(pk: SQLiteTable, pk_id: string | number, pass: PassIdentifier, backoff: Backoff) {
 	const ident_fk = db_ident_pk(pk) + pk_id
 
-	emit_log(`pass <i>${pass}</i> failed for <i>${ident_fk}</i>`)
+	//emit_log(`pass <i>${pass}</i> failed for <i>${ident_fk}</i>`)
 
 	const now = new Date().getTime()
 
@@ -89,6 +89,8 @@ export function db_backoff(pk: SQLiteTable, pk_id: string | number, pass: PassId
 		.values({ issued: now, expire: now + backoff, ident: ident_fk, pass: db_hash(pass) })
 		.run()
 }
+
+// TODO: type this to just be SQLiteTable<with column id> instead and ditch passing a duplicate id path
 
 export function db_backoff_sql(pk: SQLiteTable, pk_column: SQLiteColumn | string, pass: PassIdentifier): SQL<boolean> {
 	const ident = db_ident_pk(pk)

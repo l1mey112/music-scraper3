@@ -1,22 +1,35 @@
-import { index, sqliteTable, text, integer, unique, blob, real } from "drizzle-orm/sqlite-core";
-import { LiteralHash, ImageKind, PIdent, YoutubeChannelId, YoutubeVideoId, FSHash, SpotifyArtistId, SpotifyAlbumId, SpotifyTrackId } from "./types";
+import { index, sqliteTable, text, integer, blob, real, unique, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core";
+import { LiteralHash, ImageKind, PIdent, YoutubeChannelId, YoutubeVideoId, FSHash, SpotifyArtistId, SpotifyAlbumId, SpotifyTrackId, KarentAlbumId } from "./types";
 
 // .references(() => youtube_channel.id),
 // these are no-ops in sqlite, they don't create indexes
 // a default index is created on primary keys anyway
 
+// WITHOUT-ROWID: karent_artist
+export const karent_artist = sqliteTable('karent_artist', {
+	id: text('id').$type<KarentAlbumId>().primaryKey(),
+})
+
+// WITHOUT-ROWID: karent_album
+export const karent_album = sqliteTable('karent_album', {
+	id: text('id').$type<KarentAlbumId>().primaryKey(),
+})
+
+// WITHOUT-ROWID: spotify_artist
 export const spotify_artist = sqliteTable('spotify_artist', {
 	id: text('id').$type<SpotifyArtistId>().primaryKey(),
 
 	//name: text('name'),
 })
 
+// WITHOUT-ROWID: spotify_album
 export const spotify_album = sqliteTable('spotify_album', {
 	id: text('id').$type<SpotifyAlbumId>().primaryKey(),
 
 	//name: text('name'),
 })
 
+// WITHOUT-ROWID: spotify_track
 export const spotify_track = sqliteTable('spotify_track', {
 	id: text('id').$type<SpotifyTrackId>().primaryKey(),
 
@@ -61,15 +74,14 @@ export const thirdparty_store = sqliteTable('thirdparty:store', {
 	data: text('data', { mode: 'json' }).notNull(),
 })
 
-// `id` is the backoff PK
-
+// ~~rowid simplifies deletions~~
+// WITHOUT-ROWID: links
 export const links = sqliteTable('links', {
-	id: integer('id').primaryKey(),
 	ident: text('ident').$type<PIdent>().notNull(),
 	kind: text('kind').notNull(),
 	data: text('data').notNull(),
 }, (t) => ({
-	pidx: index("links.ident_idx").on(t.ident, t.kind, t.data),
+	pidxuni: primaryKey({ columns: [t.ident, t.kind, t.data] }),
 }))
 
 //          | hash | null hash

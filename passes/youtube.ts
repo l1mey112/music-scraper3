@@ -160,18 +160,18 @@ function youtube_id_from_url(video_url: string): string | undefined {
 
 // youtube_video.meta.youtube_video
 export async function pass_youtube_video_meta_youtube_video() {
-	const IDENT = 'youtube_video.meta.youtube_video'
+	const DIDENT = 'youtube_video.meta.youtube_video'
 
 	const k = db.select({ id: schema.youtube_video.id })
 		.from(schema.youtube_video)
-		.where(db_backoff_sql(schema.youtube_video, schema.youtube_video.id, IDENT))
+		.where(db_backoff_sql(schema.youtube_video, schema.youtube_video.id, DIDENT))
 		.all()
 
 	if (k.length == 0) {
 		return
 	}
 
-	const pc = new ProgressRef(IDENT)
+	const pc = new ProgressRef(DIDENT)
 
 	for (let offset = 0; offset < k.length; offset += 50) {
 		const batch = k.slice(offset, offset + 50) // 50 is the maximum batch size
@@ -207,7 +207,7 @@ export async function pass_youtube_video_meta_youtube_video() {
 				.run()
 
 			db_links_append(schema.youtube_video, id, Array.from(url_set))
-			db_backoff(schema.youtube_video, id, IDENT, Backoff.Complete)
+			db_backoff(schema.youtube_video, id, DIDENT, Backoff.Complete)
 		}
 	}
 
@@ -219,12 +219,12 @@ export async function pass_youtube_video_meta_youtube_video() {
 // youtube_channel.extrapolate.from_channel_id
 // no need for async, its an instant operation
 export function pass_youtube_channel_extrapolate_from_channel_id() {
-	const IDENT = 'youtube_channel.extrapolate.from_channel_id'
+	const DIDENT = 'youtube_video.meta.youtube_video'
 	
 	let updated = 0
 	const k = db.select({ channel_id: schema.youtube_video.channel_id })
 		.from(schema.youtube_video)
-		.where(sql`channel_id is not null`)
+		.where(db_backoff_sql(schema.youtube_video, schema.youtube_video.id, DIDENT))
 		.all()
 
 	const channel_ids = new Set<string>(k.map(({ channel_id }) => channel_id!))
@@ -246,9 +246,11 @@ export function pass_youtube_channel_extrapolate_from_channel_id() {
 
 // youtube_channel.meta.youtube_channel
 export async function pass_youtube_channel_meta_youtube_channel() {
+	const DIDENT = 'youtube_channel.meta.youtube_channel'
+	
 	const k = db.select({ id: schema.youtube_channel.id })
 		.from(schema.youtube_channel)
-		.where(sql`handle is null or name is null or description is null`)
+		.where(db_backoff_sql(schema.youtube_channel, schema.youtube_channel.id, DIDENT))
 		.all()
 
 	if (k.length == 0) {
@@ -284,7 +286,7 @@ export async function pass_youtube_channel_meta_youtube_channel() {
 		}
 
 		// channel.about.description can be null or undefined
-
+		
 		db.update(schema.youtube_channel)
 			.set({
 				handle: channel.about.handle,
@@ -296,6 +298,7 @@ export async function pass_youtube_channel_meta_youtube_channel() {
 
 		const links = channel.about.links.map(({ url }) => url)
 		db_links_append(schema.youtube_channel, id, links)
+		db_backoff(schema.youtube_channel, id, DIDENT, Backoff.Complete)
 	})
 
 	pc.close()

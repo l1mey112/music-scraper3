@@ -1,34 +1,36 @@
 import { CredentialKind } from "./cred"
 import { ProgressRef, component_invalidate, component_register, emit_log, route_register } from "./server"
 import { MaybePromise, PassIdentifier } from "./types"
-import { sql } from "drizzle-orm"
-import * as schema from './schema'
-import { db } from "./db"
 
 import { pass_youtube_channel_extrapolate_from_channel_id, pass_youtube_channel_meta_youtube_channel, pass_youtube_video_meta_youtube_video } from "./passes/youtube"
 import { pass_all_extrapolate_from_links, pass_links_classify_link_shorteners, pass_links_classify_strong, pass_links_classify_weak } from "./passes/links"
 import { pass_images_download_images } from "./passes/images"
 import { pass_sources_download_from_youtube_video } from "./passes/youtube_download"
 import { pass_sources_classify_chromaprint } from "./passes/chromaprint"
-import { pass_links_extrapolate_from_karent_album, pass_links_extrapolate_from_linkcore } from "./passes/links_distributors"
+import { pass_links_extrapolate_from_linkcore } from "./passes/links_distributors"
+import { pass_karent_album_meta_karent_album } from "./passes/karent"
 
 const passes: PassElement[] = [
-	{ name: 'youtube_video.meta.youtube_video', fn: pass_youtube_video_meta_youtube_video },
-	{ name: 'youtube_channel.extrapolate.from_channel_id', fn: pass_youtube_channel_extrapolate_from_channel_id },
-	{ name: 'youtube_channel.meta.youtube_channel', fn: pass_youtube_channel_meta_youtube_channel },
 	{
 		blocks: [
-			{ name: 'links.classify.link_shorteners', fn: pass_links_classify_link_shorteners },
-			{ name: 'links.classify.weak', fn: pass_links_classify_weak },
-			{ name: 'links.classify.strong', fn: pass_links_classify_strong },
-			{ name: 'links.extrapolate.from_karent_album', fn: pass_links_extrapolate_from_karent_album },
-			{ name: 'links.extrapolate.from_linkcore', fn: pass_links_extrapolate_from_linkcore },
-			{ name: 'all.extrapolate.from_links', fn: pass_all_extrapolate_from_links },
-		],
+			{ name: 'youtube_video.meta.youtube_video', fn: pass_youtube_video_meta_youtube_video },
+			{ name: 'youtube_channel.extrapolate.from_channel_id', fn: pass_youtube_channel_extrapolate_from_channel_id },
+			{ name: 'youtube_channel.meta.youtube_channel', fn: pass_youtube_channel_meta_youtube_channel },
+			{ name: 'karent_album.meta.karent_album', fn: pass_karent_album_meta_karent_album },
+			{
+				blocks: [
+					{ name: 'links.classify.link_shorteners', fn: pass_links_classify_link_shorteners },
+					{ name: 'links.classify.weak', fn: pass_links_classify_weak },
+					{ name: 'links.classify.strong', fn: pass_links_classify_strong },
+					{ name: 'links.extrapolate.from_linkcore', fn: pass_links_extrapolate_from_linkcore },
+					{ name: 'all.extrapolate.from_links', fn: pass_all_extrapolate_from_links },
+				],
+			},
+		]
 	},
-	{ name: 'images.download.images', fn: pass_images_download_images },
+	/* { name: 'images.download.images', fn: pass_images_download_images },
 	{ name: 'sources.download.from_youtube_video', fn: pass_sources_download_from_youtube_video },
-	{ name: 'sources.classify.chromaprint', fn: pass_sources_classify_chromaprint },
+	{ name: 'sources.classify.chromaprint', fn: pass_sources_classify_chromaprint }, */
 ]
 
 const TRIP_COUNT_MAX = 10
@@ -150,6 +152,7 @@ async function state_machine() {
 
 					if (pass_state.current_pass.parent) {
 						pass_state.current_pass = pass_state.current_pass.parent
+						pass_state.current_pass.idx++
 						// needs to check for breakpoints, will come back here
 						if (pass_state.state != PassStateEnum.PendingStop) {
 							pass_state.state = PassStateEnum.ReadyNext
@@ -177,7 +180,6 @@ async function state_machine() {
 
 			const pass = pass_state.current_pass.blocks[pass_state.current_pass.idx]
 			if ('blocks' in pass) {
-				pass_state.current_pass.idx++
 				pass_state.current_pass = pass
 			}
 
