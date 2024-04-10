@@ -24,10 +24,11 @@ export function db_images_append_url(pk: SQLiteTable, pk_id: string | number, ki
 
 // images.download.url_to_hash
 export async function pass_images_download_url_to_hash() {
+	// case exact glob results in "SEARCH"ing through using our index
 	let update = false
 	const urls = db.select({ hash: schema.images.hash })
 		.from(schema.images)
-		.where(sql`hash like 'http://%' or hash like 'https://%'`)
+		.where(sql`hash glob 'http://*' or hash glob 'https://*'`)
 		.all()
 
 	const pc = new ProgressRef('images.download.url_to_hash')
