@@ -29,6 +29,14 @@ static inline int imax(int a, int b) {
 	return a > b ? a : b;
 }
 
+static inline void *sqlite3_malloc0(int size) {
+	void *ptr = sqlite3_malloc(size);
+	if (ptr) {
+		memset(ptr, 0, size);
+	}
+	return ptr;
+}
+
 static void hdist32(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
 	uint32_t a = sqlite3_value_int(argv[0]);
 	uint32_t b = sqlite3_value_int(argv[1]);
@@ -65,9 +73,9 @@ static void acoustid_compare2(sqlite3_context *ctx, int argc, sqlite3_value **ar
 	int bsize = bsize_bytes / 4;
 
 	int numcounts = asize + bsize + 1;
-	uint16_t *counts = sqlite3_malloc(numcounts * sizeof(uint16_t));
+	uint16_t *counts = sqlite3_malloc0(numcounts * sizeof(uint16_t));
 
-	uint16_t *aoffsets = sqlite3_malloc(sizeof(uint16_t) * (MATCH_MASK + 1) * 2);
+	uint16_t *aoffsets = sqlite3_malloc0(sizeof(uint16_t) * (MATCH_MASK + 1) * 2);
 	uint16_t *boffsets = aoffsets + MATCH_MASK + 1;
 	uint8_t *seen = (uint8_t*)aoffsets;
 
@@ -81,7 +89,7 @@ static void acoustid_compare2(sqlite3_context *ctx, int argc, sqlite3_value **ar
 	for (int i = 0; i < asize; i++) {
 		aoffsets[MATCH_STRIP(a[i])] = i;
 	}
-	for (int i = 0; i < asize; i++) {
+	for (int i = 0; i < bsize; i++) {
 		boffsets[MATCH_STRIP(b[i])] = i;
 	}
 
