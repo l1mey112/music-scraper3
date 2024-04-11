@@ -3,7 +3,7 @@ import { db } from "../db"
 import * as schema from '../schema'
 import { run_with_concurrency_limit } from "../pass"
 import { ProgressRef } from "../server"
-import { FSHash, Override } from "../types"
+import { FSHash, Override, UniFK } from "../types"
 import * as YTDlpWrap from "yt-dlp-wrap";
 import { db_fs_sharded_path_noext_nonlazy } from "../db_misc"
 
@@ -30,6 +30,7 @@ export async function pass_sources_download_from_youtube_video() {
 			width: number
 			height: number
 			duration: number
+			bitrate: number
 		}
 
 		const args = [
@@ -40,7 +41,7 @@ export async function pass_sources_download_from_youtube_video() {
 			path + ".%(ext)s",
 			"--no-simulate",
 			"--print",
-			"{\"ext\":%(ext)j,\"width\":%(width)j,\"height\":%(height)j,\"duration\":%(duration)j}",
+			"{\"ext\":%(ext)j,\"width\":%(width)j,\"height\":%(height)j,\"duration\":%(duration)j,\"bitrate\":%(asr)j}",
 		]
 
 		// they decide the extension
@@ -52,10 +53,10 @@ export async function pass_sources_download_from_youtube_video() {
 		db.insert(schema.sources)
 			.values({
 				hash: hash,
-				ident: "yv/" + id,
+				ident: ("yv/" + id) as UniFK,
 				width: output.width,
 				height: output.height,
-				duration_s: output.duration,
+				bitrate: output.bitrate,
 			})
 			.run()
 	})

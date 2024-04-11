@@ -2,7 +2,7 @@ import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import { Database } from 'bun:sqlite'
 import * as schema from './schema'
-import { LiteralHash } from './types'
+import { LiteralHash, UniFK } from './types'
 import { SQLiteTable } from 'drizzle-orm/sqlite-core'
 
 const sqlite: Database = new Database('db.sqlite', { create: false, readwrite: true })
@@ -45,4 +45,8 @@ export function db_ident_pk(table: SQLiteTable) {
 			throw new Error(`unknown table ${table}`)
 		}
 	}
+}
+
+export function db_ident_pk_with(table: SQLiteTable, id: string | number): UniFK {
+	return (db_ident_pk(table) + id) as UniFK
 }

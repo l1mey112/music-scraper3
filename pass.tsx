@@ -6,7 +6,7 @@ import { pass_youtube_channel_extrapolate_from_channel_id, pass_youtube_channel_
 import { pass_all_extrapolate_from_links, pass_links_classify_link_shorteners, pass_links_classify_strong, pass_links_classify_weak } from "./passes/links"
 import { pass_images_download_url_to_hash } from "./passes/images"
 import { pass_sources_download_from_youtube_video } from "./passes/youtube_download"
-import { pass_sources_classify_chromaprint } from "./passes/chromaprint"
+import { pass_sources_classify_audio_fingerprint } from "./passes/chromaprint"
 import { pass_links_extrapolate_from_linkcore } from "./passes/links_distributors"
 import { pass_karent_album_meta_karent_album } from "./passes/karent"
 
@@ -30,7 +30,7 @@ const passes: PassElement[] = [
 	},
 	{ name: 'images.download.url_to_hash', fn: pass_images_download_url_to_hash },
 	{ name: 'sources.download.from_youtube_video', fn: pass_sources_download_from_youtube_video },
-	{ name: 'sources.classify.chromaprint', fn: pass_sources_classify_chromaprint },
+	{ name: 'sources.classify.audio_fingerprint', fn: pass_sources_classify_audio_fingerprint },
 ]
 
 const TRIP_COUNT_MAX = 10

@@ -4,23 +4,30 @@ import * as schema from '../schema'
 import { ProgressRef } from "../server"
 import { run_with_concurrency_limit, run_with_throughput_limit } from "../pass"
 import { $ } from 'bun'
-import { db_backoff_sql, db_fs_hash_path, db_backoff } from "../db_misc"
+import { db_backoff_sql, db_fs_hash_path, db_backoff, Backoff } from "../db_misc"
 
-// sources.classify.chromaprint
-export async function pass_sources_classify_chromaprint() {
+const fingerprint_intern = db.select({  })
+
+
+// sources.classify.audio_fingerprint
+export async function pass_sources_classify_audio_fingerprint() {
+	const DIDENT = 'sources.classify.audio_fingerprint'
+
+	// will issue backoffs for fingerprints that don't match criteria
+	
 	const k = db.select({ hash: schema.sources.hash })
 		.from(schema.sources)
-		.where(sql`${schema.sources.chromaprint} is null`)
+		.where(sql`${schema.sources.fingerprint} is null and ${db_backoff_sql(schema.sources, schema.sources.ident, DIDENT)}`)
 		.all()
 	
 	if (k.length == 0) {
 		return false
 	}
 
-	const pc = new ProgressRef('sources.classify.chromaprint')
+	const pc = new ProgressRef('sources.classify.audio_fingerprint')
 
 	await run_with_concurrency_limit(k, 10, pc, async ({ hash }) => {
-		const fpcalc = await $`fpcalc -algorithm 2 -raw -json ${db_fs_hash_path(hash)}`.quiet()
+		const fpcalc = await $`fpcalc -algorithm 2 -length 180 -raw -json ${db_fs_hash_path(hash)}`.quiet()
 
 		type FpCalc = {
 			duration: number
@@ -35,18 +42,29 @@ export async function pass_sources_classify_chromaprint() {
 		const json: FpCalc = fpcalc.json()
 		const fingerprint = new Uint32Array(json.fingerprint)
 
-		// acoustid API only supports integer durations, but fpcalc returns float durations ???
-		
-		db.update(schema.sources)
-			.set({ chromaprint: new Uint8Array(fingerprint.buffer) })
+		// https://wiki.musicbrainz.org/Guides/AcoustID
+
+		// accuracy diminishes below 25 seconds (reported 15-30, intuition 20, meet in the middle of 25)
+		// at least 80 unique items
+		if (json.duration < 25 || new Set(fingerprint).size < 80) {
+			db_backoff(schema.sources, hash, DIDENT, Backoff.Forever)
+			return
+		}
+
+		// deduplicate, acoustids > 90% are the same
+
+		/* db.update(schema.sources)
+			.set({ chromaprint: new Uint8Array(fingerprint.buffer), duration_s: json.duration })
 			.where(sql`${schema.sources.hash} = ${hash}`)
-			.run()
+			.run() */
 	})
 
 	pc.close()
 
 	return false
 }
+
+// acoustid API only supports integer durations, but fpcalc returns float durations ???
 
 // sources.classify.yv_chromaprint_to_acoustid
 /* export async function pass_sources_classify_yv_chromaprint_to_acoustid() {

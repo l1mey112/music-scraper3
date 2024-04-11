@@ -5,7 +5,7 @@ import { nanoid } from "./nanoid";
 import { resolve } from "path";
 import { existsSync, mkdirSync, statSync } from "fs";
 import * as schema from './schema'
-import { db, db_hash, db_ident_pk } from './db';
+import { db, db_hash, db_ident_pk, db_ident_pk_with } from './db';
 import { SQL, sql } from 'drizzle-orm';
 import { emit_log } from './server';
 
@@ -80,17 +80,23 @@ export enum Backoff {
 	Complete  = 30 * days,
 	Error     = 120 * days,
 	Retry     = 2 * hours,
+	Forever   = -1
 }
 
 export function db_backoff(pk: SQLiteTable, pk_id: string | number, pass: PassIdentifier, backoff: Backoff) {
-	const ident_fk = db_ident_pk(pk) + pk_id
+	const ident_fk = db_ident_pk_with(pk, pk_id)
 
 	//emit_log(`pass <i>${pass}</i> failed for <i>${ident_fk}</i>`)
 
 	const now = new Date().getTime()
 
+	let nbackoff: Backoff | null = null
+	if (backoff != Backoff.Forever) {
+		nbackoff = now + backoff
+	}
+
 	db.insert(schema.pass_backoff)
-		.values({ issued: now, expire: now + backoff, ident: ident_fk, pass: db_hash(pass) })
+		.values({ issued: now, expire: nbackoff, ident: ident_fk, pass: db_hash(pass) })
 		.run()
 }
 

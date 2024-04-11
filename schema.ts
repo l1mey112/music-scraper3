@@ -1,9 +1,23 @@
 import { index, sqliteTable, text, integer, blob, real, unique, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core";
-import { LiteralHash, ImageKind, PIdent, YoutubeChannelId, YoutubeVideoId, FSHash, SpotifyArtistId, SpotifyAlbumId, SpotifyTrackId, KarentAlbumId } from "./types";
+import { LiteralHash, ImageKind, UniFK, YoutubeChannelId, YoutubeVideoId, FSHash, SpotifyArtistId, SpotifyAlbumId, SpotifyTrackId, KarentAlbumId, TrackId, AudioFingerprintId } from "./types";
 
 // .references(() => youtube_channel.id),
 // these are no-ops in sqlite, they don't create indexes
 // a default index is created on primary keys anyway
+
+export const track = sqliteTable('track', {
+	id: integer('id').$type<TrackId>().notNull(),
+
+	// more fields...
+})
+
+export const name = sqliteTable('name', {
+	ident: text('ident').$type<UniFK>().primaryKey(),
+	locale: text('locale').notNull(),
+	name: text('text').notNull(),
+}, (t) => ({
+	uniq: unique("name.uniq").on(t.ident, t.locale)
+}))
 
 // WITHOUT-ROWID: karent_artist
 export const karent_artist = sqliteTable('karent_artist', {
@@ -59,9 +73,9 @@ export const youtube_channel = sqliteTable('youtube_channel', {
 // there is no race conditions if you ran a cleanup pass at the end, you're at no risk
 export const pass_backoff = sqliteTable('pass_backoff', {
 	issued: integer('issued').notNull(),
-	expire: integer('expire').notNull(),
+	expire: integer('expire'), // null for never
 
-	ident: text('ident').$type<PIdent>().notNull(),
+	ident: text('ident').$type<UniFK>().notNull(),
 	pass: integer('pass').$type<LiteralHash>().notNull(), // wyhash integer
 }, (t) => ({
 	pidx: index("pass_backoff.full_idx").on(t.ident, t.expire, t.pass),
@@ -76,7 +90,7 @@ export const thirdparty_store = sqliteTable('thirdparty:store', {
 
 // WITHOUT-ROWID: links
 export const links = sqliteTable('links', {
-	ident: text('ident').$type<PIdent>().notNull(),
+	ident: text('ident').$type<UniFK>().notNull(),
 	kind: text('kind').notNull(),
 	data: text('data').notNull(),
 }, (t) => ({
@@ -90,7 +104,7 @@ export const links = sqliteTable('links', {
 // WITHOUT-ROWID: images
 export const images = sqliteTable('images', {
 	hash: text('hash').$type<FSHash>().primaryKey(),
-	ident: text('ident').$type<PIdent>().notNull(),
+	ident: text('ident').$type<UniFK>().notNull(),
 	kind: text('kind').$type<ImageKind>().notNull(),
 	width: integer('width').notNull(),
 	height: integer('height').notNull(),
@@ -100,25 +114,34 @@ export const images = sqliteTable('images', {
 
 // `width` and `height` are optional, they are only present in video sources
 
-// chromaprint is a 32-bit integer array, usually bounded by 120 seconds or less
-// this doesn't represent the entire length of the audio
-// one second is ~7.8 uint32s
-//
-// compression of a chromaprint is a BAD idea, the entropy is already way too high
-// i tried, you'll save 100 bytes in 4000, not worth it
-
-// TODO: look into indices, i doubt it'll help chromaprint matching
-//       but on duration it'll definitely help since we're doing a range query
-
 // a source is a video/audio file, always containing some form of audio
 // WITHOUT-ROWID: sources
 export const sources = sqliteTable('sources', {
 	hash: text('hash').$type<FSHash>().primaryKey(),
-	ident: text('ident').$type<PIdent>().notNull(),
-	duration_s: real('duration_s').notNull(), // not entirely accurate, but close enough
-	chromaprint: blob('chromaprint').$type<Uint8Array>(),
+	ident: text('ident').$type<UniFK>().notNull(),
+	track_id: integer('track_id').$type<TrackId>(),
 	width: integer('width'),
 	height: integer('height'),
+	bitrate: integer('bitrate').notNull(), // in Hz, not kHz
+	fingerprint: integer('fingerprint').$type<AudioFingerprintId>(),
 }, (t) => ({
-	pidx: index("sources.idx").on(t.ident, t.duration_s, t.chromaprint),
+	pidx: index("sources.idx").on(t.ident, t.fingerprint),
+}))
+
+// chromaprint is a 32-bit integer array, usually bounded by 120 seconds or less
+// this doesn't represent the entire length of the audio
+// one second is ~7.8 uint32s
+
+// compression of a chromaprint is a BAD idea, the entropy is already way too high
+// i tried, you'll save 100 bytes in 4000, not worth it
+
+// rowid is beneficial here. forces integer type (no affinity) on the PK
+// and because we're storing big data in here (>200 bytes on 4KiB page)
+// https://www.sqlite.org/withoutrowid.html
+export const audio_fingerprint = sqliteTable('audio_fingerprint', {
+	id: integer('id').$type<AudioFingerprintId>().primaryKey(),
+	chromaprint: blob('chromaprint').$type<Uint8Array>().notNull(),
+	duration_s: real('duration_s').notNull(), // not accurate to sources, but within 7 seconds
+}, (t) => ({
+	pidx: index("audio_fingerprint.idx").on(t.chromaprint, t.duration_s),
 }))
