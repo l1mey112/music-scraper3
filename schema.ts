@@ -78,7 +78,7 @@ export const pass_backoff = sqliteTable('pass_backoff', {
 	ident: text('ident').$type<UniFK>().notNull(),
 	pass: integer('pass').$type<LiteralHash>().notNull(), // wyhash integer
 }, (t) => ({
-	pidx: index("pass_backoff.full_idx").on(t.ident, t.expire, t.pass),
+	pidx: index("pass_backoff.full_idx").on(t.expire, t.pass, t.ident),
 }))
 
 // persistent store
@@ -125,7 +125,8 @@ export const sources = sqliteTable('sources', {
 	bitrate: integer('bitrate').notNull(), // in Hz, not kHz
 	fingerprint: integer('fingerprint').$type<AudioFingerprintId>(),
 }, (t) => ({
-	pidx: index("sources.idx").on(t.ident, t.fingerprint),
+	//pidx0: index("sources.idx0").on(t.ident, t.fingerprint),
+	pidx1: index("sources.idx1").on(t.fingerprint),
 }))
 
 // chromaprint is a 32-bit integer array, usually bounded by 120 seconds or less
@@ -143,5 +144,5 @@ export const audio_fingerprint = sqliteTable('audio_fingerprint', {
 	chromaprint: blob('chromaprint').$type<Uint8Array>().notNull(),
 	duration_s: real('duration_s').notNull(), // not accurate to sources, but within 7 seconds
 }, (t) => ({
-	pidx: index("audio_fingerprint.idx").on(t.chromaprint, t.duration_s),
+	pidx: index("audio_fingerprint.idx").on(t.duration_s, t.chromaprint),
 }))

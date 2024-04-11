@@ -1,7 +1,7 @@
 import { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { FSHash, ImageKind } from "../types";
 import * as schema from '../schema'
-import { db, db_ident_pk } from "../db";
+import { db, db_ident_pk, db_ident_pk_with } from "../db";
 import { db_backoff_sql, db_fs_sharded_lazy_bunfile, db_backoff } from "../db_misc";
 import { sql } from "drizzle-orm";
 import { run_with_concurrency_limit } from "../pass";
@@ -13,7 +13,7 @@ export function db_images_append_url(pk: SQLiteTable, pk_id: string | number, ki
 	db.insert(schema.images)
 		.values({
 			hash: url as FSHash,
-			ident: db_ident_pk(pk) + pk_id,
+			ident: db_ident_pk_with(pk, pk_id),
 			kind: kind,
 			width: width,
 			height: height,
@@ -53,13 +53,12 @@ export async function pass_images_download_url_to_hash() {
 
 		await Bun.write(file, resp)
 
-		console.log(`downloaded ${hash} to ${file}`)
-
 		// update in place
 		db.update(schema.images)
 			.set({ hash: new_hash })
 			.where(sql`hash = ${hash}`)
 			.run()
+
 		update = true
 	})
 

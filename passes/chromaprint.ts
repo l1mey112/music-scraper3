@@ -6,15 +6,12 @@ import { run_with_concurrency_limit, run_with_throughput_limit } from "../pass"
 import { $ } from 'bun'
 import { db_backoff_sql, db_fs_hash_path, db_backoff, Backoff } from "../db_misc"
 
-const fingerprint_intern = db.select({  })
-
-
 // sources.classify.audio_fingerprint
 export async function pass_sources_classify_audio_fingerprint() {
 	const DIDENT = 'sources.classify.audio_fingerprint'
 
 	// will issue backoffs for fingerprints that don't match criteria
-	
+
 	const k = db.select({ hash: schema.sources.hash })
 		.from(schema.sources)
 		.where(sql`${schema.sources.fingerprint} is null and ${db_backoff_sql(schema.sources, schema.sources.ident, DIDENT)}`)
@@ -51,12 +48,15 @@ export async function pass_sources_classify_audio_fingerprint() {
 			return
 		}
 
-		// deduplicate, acoustids > 90% are the same
+		const g = db.insert(schema.audio_fingerprint)
+			.values({ chromaprint: new Uint8Array(fingerprint.buffer), duration_s: json.duration })
+			.returning()
+			.get()
 
-		/* db.update(schema.sources)
-			.set({ chromaprint: new Uint8Array(fingerprint.buffer), duration_s: json.duration })
+		db.update(schema.sources)
+			.set({ fingerprint: g.id })
 			.where(sql`${schema.sources.hash} = ${hash}`)
-			.run() */
+			.run()
 	})
 
 	pc.close()
