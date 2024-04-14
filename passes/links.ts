@@ -15,22 +15,29 @@ export function link_delete(id: LinkId) {
 }
 
 export function link_insert(link: Link | Link[]) {
-	if (link instanceof Array && link.length === 0) {
-		return
+	if (link instanceof Array) {		
+		if (link.length === 0) {
+			return
+		}
+	} else {
+		link = [link]
+	}
+
+	// sometimes people paste links without https://
+	for (const i of link) {
+		if (i.kind != 'unknown') {
+			continue
+		}
+		
+		if (!i.data.startsWith('http://') && !i.data.startsWith('https://')) {
+			i.data = 'https://' + i.data
+		}
 	}
 
 	db.insert($links)
 		.values(link as any) // typescript only allows one or the other, to drizzle it doesn't matter
 		.onConflictDoNothing()
 		.run()
-}
-
-export function link_tostring(link: Link): string {
-	return `${link.ident}\n${link.kind}\n${link.data}`
-}
-
-export function link_ident(link: Link): Ident {
-	return ('lk/' + link_tostring(link)) as Ident
 }
 
 // matches ...99a7_q9XuZY）←｜→次作：（しばしまたれよ）
@@ -254,13 +261,15 @@ export function pass_links_classify_weak() {
 	return updated
 }
 
-// all.extrapolate.from_links_valid_tables
+// all.extrapolate.from_links
 export function pass_all_extrapolate_from_links() {
 	let updated = false
 
 	// we only want to extrapolate links from valid tables that actually have some merit
 	// extrapolating from youtube video descriptions is a good way to blow up the DB
 	// better places would be youtube channel links, vocadb, karent, distributor links etc.
+
+	// TODO: would be easier to construct an array of invalid tables (inverted) instead
 
 	const valid_tables = [
 		$karent_artist, $karent_album,
@@ -339,6 +348,9 @@ export async function pass_links_classify_link_shorteners() {
 		// 2. the server might not support HEAD requests (though supporting GET just fine)
 		//    some servers return 404 on HEAD (200 for GET) but URL is intact
 		// -  don't req HEAD, just req GET. annoying that they aren't standards compliant
+
+		// instead of db_backoff_forever_or_delete(), just delete the link
+		// users don't really care about this stuff
 
 		db.transaction(db => {
 			link_delete(link.id)

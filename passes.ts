@@ -7,15 +7,28 @@ import { pass_sources_download_from_youtube_video } from "./passes/youtube_downl
 import { pass_sources_classify_audio_fingerprint } from "./passes/chromaprint"
 import { pass_links_extrapolate_from_linkcore, pass_links_extrapolate_from_lnk_to } from "./passes/links_distributors"
 import { pass_karent_album_meta_karent_album } from "./passes/karent"
+import { pass_album_meta_vocadb, pass_artist_meta_vocadb, pass_track_meta_vocadb, pass_track_meta_vocadb_from_youtube } from "./passes/vocadb"
 
 export const passes: PassElement[] = [
 	{
 		blocks: [
-			{ name: 'youtube_video.meta.youtube_video', fn: pass_youtube_video_meta_youtube_video },
-			{ name: 'youtube_channel.extrapolate.from_channel_id', fn: pass_youtube_channel_extrapolate_from_channel_id },
-			{ name: 'youtube_channel.meta.youtube_channel0', fn: pass_youtube_channel_meta_youtube_channel0 },
-			{ name: 'youtube_channel.meta.youtube_channel1', fn: pass_youtube_channel_meta_youtube_channel1 },
-			{ name: 'karent_album.meta.karent_album', fn: pass_karent_album_meta_karent_album },
+			{
+				blocks: [
+					{
+						blocks: [
+							{ name: 'youtube_video.meta.youtube_video', fn: pass_youtube_video_meta_youtube_video },
+							{ name: 'youtube_channel.extrapolate.from_channel_id', fn: pass_youtube_channel_extrapolate_from_channel_id },
+							{ name: 'youtube_channel.meta.youtube_channel0', fn: pass_youtube_channel_meta_youtube_channel0 },
+							{ name: 'youtube_channel.meta.youtube_channel1', fn: pass_youtube_channel_meta_youtube_channel1 },
+							{ name: 'karent_album.meta.karent_album', fn: pass_karent_album_meta_karent_album },
+							{ name: 'track.meta.vocadb_from_youtube', fn: pass_track_meta_vocadb_from_youtube },
+							{ name: 'track.meta.vocadb', fn: pass_track_meta_vocadb },
+						]
+					},
+					{ name: 'album.meta.vocadb', fn: pass_album_meta_vocadb },
+				]
+			},
+			{ name: 'artist.meta.vocadb', fn: pass_artist_meta_vocadb },
 			{
 				blocks: [
 					{ name: 'links.classify.link_shorteners', fn: pass_links_classify_link_shorteners },

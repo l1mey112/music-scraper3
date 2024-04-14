@@ -1,5 +1,5 @@
 import { SQL, sql } from "drizzle-orm"
-import { db, db_ident_pk } from "./db"
+import { db, db_ident_pk, db_ident_pk_with } from "./db"
 import { $retry_backoff } from "./schema"
 import { ProgressRef } from "./server"
 import { DAYS, Ident, PassIdentifier } from "./types"
@@ -107,10 +107,47 @@ export async function run_with_throughput_limit<T>(arr: T[], M: number, N: numbe
 	await Promise.all(active_promises.map(v => v.item))
 }
 
+export function db_backoff_or_delete(pass: PassIdentifier, pk: SQLiteTable, pk_column: SQLiteColumn | string, id: any) {
+	// only delete if there is zero existing backoff entries
+	// this means that the data is brand new and we can delete it
+
+	const db_count = db.select({ count: sql<number>`count(*)` })
+		.from($retry_backoff)
+		.where(sql`pass = ${wyhash(pass)} and ident = ${db_ident_pk_with(pk, id)}`)
+		.get()
+
+	const count = db_count ? db_count.count : 0
+
+	if (count == 0) {
+		console.log(`deleting early ${db_ident_pk_with(pk, id)}, zero backoffs`)
+		db.delete(pk)
+			.where(sql`${pk_column} = ${id}`)
+			.run()
+		return
+	}
+
+	// else
+
+	const ident = db_ident_pk_with(pk, id)
+	db_backoff_forever(pass, ident)
+}
+
 export function db_backoff_forever(pass: PassIdentifier, id: Ident) {
 	db.insert($retry_backoff)
 		.values({
 			issued: Date.now(),
+			ident: id,
+			pass: wyhash(pass),
+		})
+		.onConflictDoNothing()
+		.run()
+}
+
+export function db_backoff_exactly(pass: PassIdentifier, id: Ident, time: number) {
+	db.insert($retry_backoff)
+		.values({
+			issued: Date.now(),
+			expire: Date.now() + time,
 			ident: id,
 			pass: wyhash(pass),
 		})

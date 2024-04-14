@@ -106,17 +106,16 @@ export async function meta_youtube_channel_lemmnos(channel_ids: string[]): Promi
 
 	const result: (YoutubeChannelLemmnos | string)[] = []
 
-	// avoid O(n^2) find() by using an index
-	let i = 0
+	const map = new Map<string, any>()
+	for (const inner of json.items) {
+		map.set(inner.id, inner)
+	}
+
 	for (const channel_id of channel_ids) {
-		const inner = json.items[i]
-		if (!inner || inner.id != channel_id) {
+		const inner = map.get(channel_id)
+		if (!inner) {
 			result.push(channel_id)
 		} else {
-			// wouldn't happen
-			// TODO: same as above
-			assert(inner.id == channel_id, `youtube channel id mismatch: ${inner.id} != ${channel_id}`)
-
 			// trim the fat
 			delete inner.about.stats
 			for (const link of inner.about.links) {
@@ -127,7 +126,6 @@ export async function meta_youtube_channel_lemmnos(channel_ids: string[]): Promi
 				about: inner.about,
 				images: inner.snippet,
 			})
-			i++
 		}
 	}
 
@@ -154,17 +152,17 @@ export async function meta_youtube_channel_v3(channel_ids: string[]): Promise<(s
 
 	const result: (YoutubeChannelV3 | string)[] = []
 
-	// avoid O(n^2) find() by using an index
-	let i = 0
+	const map = new Map<string, any>()
+	for (const inner of json.items) {
+		map.set(inner.id, inner.snippet)
+	}
+
 	for (const channel_id of channel_ids) {
-		const inner = json.items[i]
-		if (!inner || inner.id != channel_id) {
+		const inner = map.get(channel_id)
+		if (!inner) {
 			result.push(channel_id)
 		} else {
-			// wouldn't happen
-			assert(inner.id == channel_id, `youtube channel id mismatch: ${inner.id} != ${channel_id}`)
-			result.push(inner.snippet)
-			i++
+			result.push(inner)
 		}
 	}
 

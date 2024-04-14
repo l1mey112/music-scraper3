@@ -44,9 +44,9 @@ export function db_ident_pk(table: SQLiteTable) {
 		case $spotify_album:   return 'sa/'
 		case $spotify_artist:  return 'sr/'
 		case $links:		   return 'lk/'
-		case $vocadb_song:     return 'vs'
-		case $vocadb_album:    return 'va'
-		case $vocadb_artist:   return 'vr'
+		case $vocadb_song:     return 'vs/'
+		case $vocadb_album:    return 'va/'
+		case $vocadb_artist:   return 'vr/'
 		default: {
 			throw new Error(`unknown table ${table}`)
 		}
