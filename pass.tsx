@@ -1,39 +1,9 @@
 import { CredentialKind } from "./cred"
-import { ProgressRef, component_invalidate, component_register, emit_log, route_register } from "./server"
+import { component_invalidate, component_register, emit_log, route_register } from "./server"
 import { MaybePromise, PassIdentifier } from "./types"
+import { passes } from "./passes"
 
-import { pass_youtube_channel_extrapolate_from_channel_id, pass_youtube_channel_meta_youtube_channel, pass_youtube_video_meta_youtube_video } from "./passes/youtube"
-import { pass_all_extrapolate_from_links, pass_links_classify_link_shorteners, pass_links_classify_strong, pass_links_classify_weak } from "./passes/links"
-import { pass_images_download_url_to_hash } from "./passes/images"
-import { pass_sources_download_from_youtube_video } from "./passes/youtube_download"
-import { pass_sources_classify_audio_fingerprint } from "./passes/chromaprint"
-import { pass_links_extrapolate_from_linkcore } from "./passes/links_distributors"
-import { pass_karent_album_meta_karent_album } from "./passes/karent"
-
-const passes: PassElement[] = [
-	{
-		blocks: [
-			{ name: 'youtube_video.meta.youtube_video', fn: pass_youtube_video_meta_youtube_video },
-			{ name: 'youtube_channel.extrapolate.from_channel_id', fn: pass_youtube_channel_extrapolate_from_channel_id },
-			{ name: 'youtube_channel.meta.youtube_channel', fn: pass_youtube_channel_meta_youtube_channel },
-			{ name: 'karent_album.meta.karent_album', fn: pass_karent_album_meta_karent_album },
-			{
-				blocks: [
-					{ name: 'links.classify.link_shorteners', fn: pass_links_classify_link_shorteners },
-					{ name: 'links.classify.weak', fn: pass_links_classify_weak },
-					{ name: 'links.classify.strong', fn: pass_links_classify_strong },
-					{ name: 'links.extrapolate.from_linkcore', fn: pass_links_extrapolate_from_linkcore },
-					{ name: 'all.extrapolate.from_links', fn: pass_all_extrapolate_from_links },
-				],
-			},
-		]
-	},
-	{ name: 'images.download.url_to_hash', fn: pass_images_download_url_to_hash },
-	{ name: 'sources.download.from_youtube_video', fn: pass_sources_download_from_youtube_video },
-	{ name: 'sources.classify.audio_fingerprint', fn: pass_sources_classify_audio_fingerprint },
-]
-
-const TRIP_COUNT_MAX = 10
+const TRIP_COUNT_MAX = 20
 
 type PassState = {
 	state: PassStateEnum
@@ -81,7 +51,7 @@ type PassBlock = {
 }
 
 type PassGroup = { blocks: PassElement[] }
-type PassElement = PassGroup | PassBlock
+export type PassElement = PassGroup | PassBlock
 
 enum PassStateEnum {
 	Running,
@@ -178,10 +148,14 @@ async function state_machine() {
 				pass_state.current_pass.mutations.clear()
 			}
 
-			const pass = pass_state.current_pass.blocks[pass_state.current_pass.idx]
-			if ('blocks' in pass) {
-				pass_state.current_pass = pass
-			}
+			// recursively enter the next pass
+			let pass
+			do {
+				pass = pass_state.current_pass.blocks[pass_state.current_pass.idx]
+				if ('blocks' in pass) {
+					pass_state.current_pass = pass
+				}
+			} while ('blocks' in pass)
 
 			if (pass_state.state == PassStateEnum.PendingStop) {
 				pass_state.state = PassStateEnum.Stopped
@@ -377,96 +351,3 @@ route_register('POST', 'pass_stop', pass_stop)
 route_register('POST', 'pass_toggle_st', pass_toggle_st)
 route_register('POST', 'pass_toggle_bp', pass_toggle_bp)
 component_register(pass_tostring, 'left')
-
-export async function run_with_concurrency_limit<T>(arr: T[], concurrency_limit: number, ref: ProgressRef | undefined, next: (v: T) => Promise<void>): Promise<void> {
-	if (arr.length == 0) {
-		return
-	}
-	
-	const active_promises: Promise<void>[] = []
-
-	if (ref) {
-		ref.emit(0)
-	}
-
-	let di = 0
-	const diff = 100 / arr.length
-	for (const item of arr) {
-		// wait until there's room for a new operation
-		while (active_promises.length >= concurrency_limit) {
-			await Promise.race(active_promises)
-		}
-
-		const next_operation = next(item)
-		active_promises.push(next_operation)
-
-		// update progress
-		if (ref) {
-			di += diff
-			ref.emit(di)
-		}
-
-		next_operation.finally(() => {
-			const index = active_promises.indexOf(next_operation)
-			if (index !== -1) {
-				active_promises.splice(index, 1)
-			}
-		})
-	}
-
-	// wait for all active operations to complete
-	await Promise.all(active_promises)
-}
-
-// run M operations per N milliseconds
-// https://thoughtspile.github.io/2018/07/07/rate-limit-promises/
-// this doesn't really follow the guide, it may be suboptimal but ehh
-export async function run_with_throughput_limit<T>(arr: T[], M: number, N: number, ref: ProgressRef | undefined, next: (v: T) => Promise<void>): Promise<void> {
-	if (arr.length == 0) {
-		return
-	}
-	
-	type Operation = { item: Promise<void>, date: Date }
-	
-	// in flight operation | last operation time
-	const active_promises: Operation[] = []
-
-	if (ref) {
-		ref.emit(0)
-	}
-
-	let di = 0
-	const diff = 100 / arr.length
-	for (const item of arr) {
-		// insert
-		if (active_promises.length < M) {
-			active_promises.push({ item: next(item), date: new Date(Date.now() + N) })
-			continue
-		}
-
-		// find operation with the oldest date
-
-		let oldest_idx = 0
-		for (let i = 1; i < active_promises.length; i++) {
-			if (active_promises[i].date < active_promises[oldest_idx].date) {
-				oldest_idx = i
-			}
-		}
-
-		// Bun sleeps up till the date
-		const oldest = active_promises[oldest_idx]
-		await oldest.item
-		await Bun.sleep(oldest.date)
-
-		// update progress
-		if (ref) {
-			di += diff
-			ref.emit(di)
-		}
-
-		// replace
-		active_promises[oldest_idx] = { item: next(item), date: new Date(Date.now() + N) }
-	}
-
-	await Promise.all(active_promises.map(v => v.item))
-}

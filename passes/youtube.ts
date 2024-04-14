@@ -1,31 +1,13 @@
 import { sql } from "drizzle-orm"
 import { db } from "../db"
-import * as schema from '../schema'
-import { run_with_concurrency_limit } from "../pass"
+import { $youtube_video, $youtube_channel, $i10n } from '../schema'
 import { ProgressRef } from "../server"
-import { Backoff, db_backoff, db_backoff_sql, db_links_append } from "./../db_misc"
 import { db_images_append_url } from "./images"
-import { ImageKind } from "../types"
-import { links_from_text } from "./links"
-
-export async function youtube_video_exists(id: string): Promise<boolean> {
-	const req = await fetch(`https://www.youtube.com/oembed?format=json&url=https://www.youtube.com/watch?v=${id}`)
-	return req.status === 200
-}
-
-export async function youtube_channel_exists(id: string): Promise<boolean> {
-	// no oembed test, need to request the channel
-
-	const resp = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${default_key}&id=${id}`, {
-		headers: {
-			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
-			"Referer": "https://mattw.io/",
-		}
-	})
-	const json = await resp.json() as any
-
-	return json.pageInfo.totalResults > 0
-}
+import { I10n, Ident, ImageKind, Link, Locale, LocaleNone, LocalePart, YoutubeChannelId } from "../types"
+import { link_insert, links_from_text } from "./links"
+import { assert, db_backoff, db_backoff_sql, run_with_concurrency_limit } from "../util"
+import { locale_from_bcp_47, locale_insert } from "../locale"
+import { YoutubeImage, meta_youtube_channel_lemmnos, meta_youtube_channel_v3, meta_youtube_video_v3 } from "./youtube_api"
 
 function largest_image(arr: Iterable<YoutubeImage>): YoutubeImage | undefined {
 	let largest: YoutubeImage | undefined = undefined;
@@ -39,132 +21,13 @@ function largest_image(arr: Iterable<YoutubeImage>): YoutubeImage | undefined {
 	return largest;
 }
 
-// https://github.com/mattwright324/youtube-metadata
-const default_key = atob('QUl6YVN5QVNUTVFjay1qdHRGOHF5OXJ0RW50MUh5RVl3NUFtaEU4')
-
-// much slower, but we need the URLs
-async function meta_youtube_channel(channel_id: string): Promise<YoutubeChannel> {
-	const resp = await fetch(`https://yt4.lemnoslife.com/channels?part=snippet,about&id=${channel_id}`)
-	if (!resp.ok) {
-		throw new Error(`youtube channel req failed (id: ${channel_id})`)
-	}
-	const json = await resp.json() as any
-	if (json.error?.message) {
-		throw new Error(`youtube channel req failed (id: ${channel_id}): ${json.error.message}`)
-	}
-	if (json.items.length === 0) {
-		throw new Error(`youtube channel req is empty (id: ${channel_id})`)
-	}
-	const inner = json.items[0]
-
-	// trim the fat
-	delete inner.about.stats
-	for (const link of inner.about.links) {
-		delete link.favicon
-	}
-
-	// lemnoslife doesn't provide display name
-	// youtube v3 doesn't provide links
-
-	//https://yt4.lemnoslife.com/noKey/channels?part=snippet&id=
-	const yt_resp = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${default_key}&part=snippet&id=${channel_id}`, {
-		headers: {
-			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
-			"Referer": "https://mattw.io/",
-		}
-	})
-	const yt_json = await yt_resp.json() as any
-	if (json.items.length === 0) {
-		throw new Error(`youtube channel req is empty (id: ${channel_id})`)
-	}
-
-	return {
-		about: inner.about,
-		images: inner.snippet,
-		display_name: yt_json.items[0].snippet.title
-	}
-}
-
-// magnitudes faster
-// cannot have more than 50 of these, assume they're in order???
-async function meta_youtube_video(video_ids: string[]): Promise<YoutubeVideo[]> {
-	if (video_ids.length > 50) {
-		throw new Error(`youtube video req cannot have more than 50 ids (ids: ${video_ids.join(',')})`)
-	}
-
-	// their API is sloooowww
-	//const resp = await fetch(`https://yt4.lemnoslife.com/noKey/videos?id=${video_id}&part=snippet`, {
-	const resp = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${default_key}&id=${video_ids.join(',')}&part=snippet`, {
-		headers: {
-			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
-			"Referer": "https://mattw.io/",
-		}
-	})
-
-	const json = await resp.json() as any
-	if (!resp.ok) {
-		throw new Error(`youtube video req failed`)
-	}
-	if (json.pageInfo.totalResults != video_ids.length) {
-		throw new Error(`youtube video req is missing all data`)
-	}
-
-	// https://developers.google.com/youtube/v3/docs/videos#resource
-	return json.items.map((inner: any) => {
-		inner.snippet.id = inner.id // attach id
-		return inner.snippet
-	})
-}
-
-export async function meta_youtube_handle_to_id(handle: string): Promise<string | undefined> {
-	if (!handle.startsWith('@')) {
-		throw new Error(`youtube handle must start with @ (idL: ${handle})`)
-	}
-
-	// could fetch `https://yt4.lemnoslife.com/channels?handle=@HANDLE` but that is slower than youtube v3
-	const resp = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${default_key}&forHandle=${handle}&part=snippet`, {
-		headers: {
-			"User-Agent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/2.2 Chrome/63.0.3239.84 TV Safari/537.36",
-			"Referer": "https://mattw.io/",
-		}
-	})
-
-	const json: any = await resp.json()
-	if (json.pageInfo.totalResults === 0) {
-		return undefined
-	}
-
-	return json.items[0].id
-}
-
-// TODO: use later
-function youtube_id_from_url(video_url: string): string | undefined {
-	const regex =  [
-		/(?:http[s]?:\/\/)?(?:\w+\.)?youtube.com\/watch\?v=([\w_-]+)(?:[\/&].*)?/i,
-		/(?:http[s]?:\/\/)?(?:\w+\.)?youtube.com\/(?:v|embed|shorts|video|watch|live)\/([\w_-]+)(?:[\/&].*)?/i,
-		/(?:http[s]?:\/\/)?youtu.be\/([\w_-]+)(?:\?.*)?/i,
-		/(?:http[s]?:\/\/)?filmot.com\/video\/([\w_-]+)(?:[?\/&].*)?/i,
-		/(?:http[s]?:\/\/)?filmot.com\/sidebyside\/([\w_-]+)(?:[?\/&].*)?/i,
-		/^([\w-]{11})$/i
-	]
-
-	for (const pattern of regex) {
-		const match = video_url.match(pattern)
-		if (match && match[1]) {
-			return match[1]
-		}
-	}
-
-	return undefined
-}
-
 // youtube_video.meta.youtube_video
 export async function pass_youtube_video_meta_youtube_video() {
 	const DIDENT = 'youtube_video.meta.youtube_video'
 
-	const k = db.select({ id: schema.youtube_video.id })
-		.from(schema.youtube_video)
-		.where(db_backoff_sql(schema.youtube_video, schema.youtube_video.id, DIDENT))
+	const k = db.select({ id: $youtube_video.id })
+		.from($youtube_video)
+		.where(db_backoff_sql(DIDENT, $youtube_video, $youtube_video.id))
 		.all()
 
 	if (k.length == 0) {
@@ -174,42 +37,119 @@ export async function pass_youtube_video_meta_youtube_video() {
 	const pc = new ProgressRef(DIDENT)
 
 	for (let offset = 0; offset < k.length; offset += 50) {
-		const batch = k.slice(offset, offset + 50) // 50 is the maximum batch size
-		const ids = batch.map(v => v.id)
+		pc.emit(offset / k.length * 100)
 
-		const videos = await meta_youtube_video(ids)
+		const batch = k.slice(offset, offset + 50) // 50 is the maximum batch size
+		const results = await meta_youtube_video_v3(batch.map(v => v.id))
 
 		for (let i = 0; i < batch.length; i++) {
-			const meta = videos[i]
+			const result = results[i]
 
-			// rare?
-			if (batch[i].id != meta.id) {
-				throw new Error(`youtube video meta mismatch (batch[].id: ${batch[i].id}, meta.id: ${meta.id})`)
+			// failed, delete
+			// TODO: properly log
+			if (typeof result === 'string') {
+				db.delete($youtube_video)
+					.where(sql`id = ${result}`)
+					.run()
+				continue
 			}
-			
-			// youtube provides many different thumbnails, and we may choose a thumbnail that isn't actually the thumbnail
+
+			let has_loc_title = false
+			let has_loc_description = false
+
+			const ident = ('yv/' + result.id) as Ident
+			const locales: I10n[] = []
+
+			// localizations are higher quality
+			for (const [locale_string, local] of Object.entries(result.localizations ?? {})) {
+				const locale = locale_from_bcp_47(locale_string)
+				if (!locale) {
+					continue
+				}
+				const title = local.title
+				const description = local.description
+
+				if (title) {
+					locales.push({
+						ident,
+						locale,
+						part: LocalePart.name,
+						text: title,
+					})
+					has_loc_title = true
+				}
+				if (description) {
+					locales.push({
+						ident,
+						locale,
+						part: LocalePart.description,
+						text: description,
+					})
+					has_loc_description = true
+				}
+			}
+
+			{
+				// this gets lower quality than localizations, insert last
+
+				let default_video_locale = LocaleNone
+				if (result.defaultLanguage) {
+					const locale = locale_from_bcp_47(result.defaultLanguage)
+					if (locale) {
+						default_video_locale = locale
+					}
+				}
+
+				const title = result.title // default video language
+				const description = result.description // default video language
+				if (!has_loc_title) {
+					locales.push({
+						ident,
+						locale: default_video_locale,
+						part: LocalePart.name,
+						text: title,
+					})
+				}
+				if (!has_loc_description) {
+					locales.push({
+						ident,
+						locale: default_video_locale,
+						part: LocalePart.description,
+						text: description,
+					})
+				}
+			}
+
+			// youtube provides many different thumbnails, and we may choose a thumbnail that isn't actually the displayed thumbnail
 			// though the largest one is probably the right one...
-			const id = meta.id
-			const thumb = largest_image(Object.values(meta.thumbnails))
+			const thumb = largest_image(Object.values(result.thumbnails))
 
-			if (thumb) {
-				db_images_append_url(schema.youtube_video, id, 'yt_thumbnail', thumb.url, thumb.width, thumb.height)
-			}
+			// extract all URLs from the description, doesn't matter what locale
+			const urls = links_from_text(result.description)
 
-			// extract all URLs from the description
-			const url_set = links_from_text(meta.description)
+			const links: Link[] = urls.map(url => ({
+				ident,
+				kind: 'unknown',
+				data: url,
+			}))
 
-			db.update(schema.youtube_video)
-				.set({
-					channel_id: meta.channelId,
-					name: meta.title,
-					description: meta.description,
-				})
-				.where(sql`id = ${id}`)
-				.run()
+			db.transaction(db => {
+				db_backoff(DIDENT, ident)
 
-			db_links_append(schema.youtube_video, id, Array.from(url_set))
-			db_backoff(schema.youtube_video, id, DIDENT, Backoff.Complete)
+				if (thumb) {
+					db_images_append_url(ident, 'yt_thumbnail', thumb.url, thumb.width, thumb.height)
+				}
+
+				db.update($youtube_video)
+					.set({
+						channel_id: result.channelId as YoutubeChannelId,
+					})
+					.where(sql`id = ${result.id}`)
+					.run()
+
+				locale_insert(locales)
+				link_insert(links)
+			})
 		}
 	}
 
@@ -219,162 +159,198 @@ export async function pass_youtube_video_meta_youtube_video() {
 }
 
 // youtube_channel.extrapolate.from_channel_id
-// no need for async, its an instant operation
 export function pass_youtube_channel_extrapolate_from_channel_id() {
-	const DIDENT = 'youtube_video.meta.youtube_video'
-	
-	let updated = 0
-	const k = db.select({ channel_id: schema.youtube_video.channel_id })
-		.from(schema.youtube_video)
-		.where(db_backoff_sql(schema.youtube_video, schema.youtube_video.id, DIDENT))
+	let updated = false
+	const k = db.selectDistinct({ channel_id: $youtube_video.channel_id })
+		.from($youtube_video)
+		.where(sql`${$youtube_video.channel_id} is not null
+			and not exists (select 1 from ${$youtube_channel} where ${$youtube_channel.id} = ${$youtube_video.channel_id})`)
 		.all()
 
-	const channel_ids = new Set<string>(k.map(({ channel_id }) => channel_id!))
-
-	for (const channel_id of channel_ids) {
-		try {
-			// will throw if already exists
-			db.insert(schema.youtube_channel)
-				.values({ id: channel_id })
-				.run()
-			updated++
-		} catch {
-			// nothing
-		}		
+	for (const { channel_id } of k) {
+		db.insert($youtube_channel)
+			.values({ id: channel_id! })
+			.onConflictDoNothing()
+			.run()	
 	}
 
-	return updated > 0
+	return k.length > 0
 }
 
-// youtube_channel.meta.youtube_channel
-export async function pass_youtube_channel_meta_youtube_channel() {
-	const DIDENT = 'youtube_channel.meta.youtube_channel'
+// youtube_channel.meta.youtube_channel0
+export async function pass_youtube_channel_meta_youtube_channel0() {
+	const DIDENT = 'youtube_channel.meta.youtube_channel0'
 	
-	const k = db.select({ id: schema.youtube_channel.id })
-		.from(schema.youtube_channel)
-		.where(db_backoff_sql(schema.youtube_channel, schema.youtube_channel.id, DIDENT))
+	let updated = false
+	const k = db.select({ id: $youtube_channel.id })
+		.from($youtube_channel)
+		.where(db_backoff_sql(DIDENT, $youtube_channel, $youtube_channel.id))
 		.all()
 
-	if (k.length == 0) {
-		return
-	}
+	const pc = new ProgressRef(DIDENT)
 
-	const pc = new ProgressRef('youtube_channel.meta.youtube_channel')
+	for (let offset = 0; offset < k.length; offset += 50) {
+		pc.emit(offset / k.length * 100)
 
-	await run_with_concurrency_limit(k, 2, pc, async ({ id }) => {
-		const channel = await meta_youtube_channel(id)
+		const batch = k.slice(offset, offset + 50) // 50 is the maximum batch size
+		const results = await meta_youtube_channel_lemmnos(batch.map(v => v.id))
 
-		type ChannelKey = keyof typeof channel.images
+		for (let i = 0; i < batch.length; i++) {
+			const result = results[i]
 
-		// 'yt_avatar' | 'yt_banner' | 'yt_tv_banner' | 'yt_mobile_banner'
-		const img_map: Record<ChannelKey, ImageKind> = {
-			avatar: 'yt_avatar',
-			banner: 'yt_banner',
-			tvBanner: 'yt_tv_banner',
-			mobileBanner: 'yt_mobile_banner',
-		}
-
-		for (const [key, kind] of Object.entries(img_map)) {
-			const images = channel.images[key as ChannelKey]
-			if (!images) {
+			// failed, delete
+			// TODO: properly log
+			if (typeof result === 'string') {
+				db.delete($youtube_channel)
+					.where(sql`id = ${result}`)
+					.run()
 				continue
 			}
 
-			const thumb = largest_image(images)
+			const ident = ('yc/' + batch[i].id) as Ident
 
-			if (thumb) {
-				db_images_append_url(schema.youtube_channel, id, kind, thumb.url, thumb.width, thumb.height)
+			type ChannelKey = keyof typeof result.images
+
+			// 'yt_avatar' | 'yt_banner' | 'yt_tv_banner' | 'yt_mobile_banner'
+			const img_map: Record<ChannelKey, ImageKind> = {
+				avatar: 'yt_avatar',
+				banner: 'yt_banner',
+				tvBanner: 'yt_tv_banner',
+				mobileBanner: 'yt_mobile_banner',
 			}
-		}
 
-		// channel.about.description can be null or undefined
+			db.transaction(db => {
+				for (const [key, kind] of Object.entries(img_map)) {
+					const images = result.images[key as ChannelKey]
+					if (!images) {
+						continue
+					}
 		
-		db.update(schema.youtube_channel)
-			.set({
-				handle: channel.about.handle,
-				name: channel.display_name,
-				description: channel.about.description ?? '',
+					const thumb = largest_image(images)
+		
+					if (thumb) {
+						db_images_append_url(ident, kind, thumb.url, thumb.width, thumb.height)
+					}
+				}
+	
+				// youtube v3 for channels doesn't actually set the `defaultLanguage` field on the snippet
+				// which is fucking stupid. we have no way of telling the exact locale of a translation
+				// of either the title or the description. forcing a language locale with the `?hl=` parameter
+				// doesn't even work either.
+
+				if (result.about.description) {
+					const description: I10n = {
+						ident,
+						locale: LocaleNone,
+						part: LocalePart.description,
+						text: result.about.description,
+					}
+	
+					locale_insert(description)
+				}
+
+				// channel title/display name isn't present in lemmnos
+				// requested in `youtube_channel.meta.youtube_channel1`
+
+				db.update($youtube_channel)
+					.set({
+						handle: result.about.handle,
+					})
+					.where(sql`id = ${ident}`)
+					.run()
+				
+				const links: Link[] = result.about.links.map(({ url }) => {
+					// sometimes people paste links without https://
+					if (!url.startsWith('http://') && !url.startsWith('https://')) {
+						url = 'https://' + url
+					}
+		
+					return {
+						ident,
+						kind: 'unknown',
+						data: url,
+					}
+				})
+
+				link_insert(links)
+				db_backoff(DIDENT, ident)
 			})
-			.where(sql`id = ${id}`)
-			.run()
-
-		const links = channel.about.links.map(({ url }) => {
-			// sometimes people paste links without https://
-			if (!url.startsWith('http://') && !url.startsWith('https://')) {
-				url = 'https://' + url
-			}
-
-			return url
-		})
-
-		db_links_append(schema.youtube_channel, id, links)
-		db_backoff(schema.youtube_channel, id, DIDENT, Backoff.Complete)
-	})
+			updated = true
+		}
+	}
 
 	pc.close()
 
-	return true
+	return updated
 }
 
-type YoutubeImage = {
-	url: string
-	width: number
-	height: number
-}
+// youtube_channel.meta.youtube_channel1
+export async function pass_youtube_channel_meta_youtube_channel1() {
+	const DIDENT = 'youtube_channel.meta.youtube_channel1'
+	
+	let updated = false
+	const k = db.select({ id: $youtube_channel.id })
+		.from($youtube_channel)
+		.where(db_backoff_sql(DIDENT, $youtube_channel, $youtube_channel.id))
+		.all()
 
-type YoutubeChannelAboutLink = {
-	url: string   // "https://open.spotify.com/artist/3b7jPCedJ2VH4l4rcOTvNC"
-	title: string // "Spotify"
-	// ignore favicons, they're huge wastes of space
-	// favicon: { url: string, width: number, height: number }[]
-}
+	const pc = new ProgressRef(DIDENT)
 
-type YoutubeChannelAbout = {
-	// ignore stats, no point keeping them
-	/* stats: {
-		joinedDate: number
-		viewCount: number
-		subscriberCount: number
-		videoCount: number
-	} */
-	description?: string | undefined
-	details: {
-		location: string
+	for (let offset = 0; offset < k.length; offset += 50) {
+		pc.emit(offset / k.length * 100)
+
+		const batch = k.slice(offset, offset + 50) // 50 is the maximum batch size
+		const results = await meta_youtube_channel_v3(batch.map(v => v.id))
+
+		for (let i = 0; i < batch.length; i++) {
+			const result = results[i]
+
+			// failed, delete
+			// TODO: properly log
+			if (typeof result === 'string') {
+				db.delete($youtube_channel)
+					.where(sql`id = ${result}`)
+					.run()
+				continue
+			}
+
+			const ident = ('yc/' + batch[i].id) as Ident
+
+			// this is ran after, and will take precedence over the last pass
+
+			// even though we have no way of telling the locale of localized
+			// (because youtube doesn't fucking tell us??)
+			// its still higher quality as this is what people will see
+
+			db.transaction(db => {
+				if (result.description) {
+					const description: I10n = {
+						ident,
+						locale: LocaleNone,
+						part: LocalePart.description,
+						text: result.localized.description,
+					}
+	
+					locale_insert(description)
+				}
+	
+				const display_name: I10n = {
+					ident,
+					locale: LocaleNone,
+					part: LocalePart.name,
+					text: result.localized.title,
+				}
+	
+				locale_insert(display_name)
+				db_backoff(DIDENT, ident)
+			})
+			updated = true
+		}
 	}
-	links: YoutubeChannelAboutLink[]
-	handle: string // @pinocchiop
-}
 
-type YoutubeChannelSnippet = {
-	avatar: YoutubeImage[] | null
-	banner: YoutubeImage[] | null
-	tvBanner: YoutubeImage[] | null
-	mobileBanner: YoutubeImage[] | null
-}
+	pc.close()
 
-type YoutubeChannel = {
-	about: YoutubeChannelAbout
-	images: YoutubeChannelSnippet
-	display_name: string
-}
-
-type YoutubeVideo = {
-	id: string
-	publishedAt: string
-	channelId: string
-	title: string
-	description: string
-	thumbnails: {
-		[key: string]: YoutubeImage // key being "default" | "medium" | "high" | "standard" | "maxres" | ...
-	}
-	channelTitle: string
-	tags: string[]
-	categoryId: string
-	liveBroadcastContent: string
-	localized: {
-		title: string
-		description: string
-	}
+	return updated
 }
 
 // https://stackoverflow.com/questions/18953499/youtube-api-to-fetch-all-videos-on-a-channel

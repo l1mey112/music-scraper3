@@ -1,4 +1,4 @@
-preload = ["./sh/hdist_compile.ts"]
+preload = ["./sh/ext_compile.ts"]
 
 [loader]
 ".html" = "text"

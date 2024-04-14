@@ -2,11 +2,11 @@
 
 import { sql } from "drizzle-orm";
 import { db, db_close } from "../db";
-import * as schema from '../schema'
+import { $links } from '../schema'
 
 const k = db.select()
-	.from(schema.links)
-	.where(sql`${schema.links.kind} = 'unknown'`)
+	.from($links)
+	.where(sql`${$links.kind} = 'unknown'`)
 	.all()
 
 for (const { data } of k) {

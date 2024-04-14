@@ -1,22 +1,21 @@
-import { SQLiteTable } from "drizzle-orm/sqlite-core";
-import { FSHash, ImageKind } from "../types";
-import * as schema from '../schema'
-import { db, db_ident_pk, db_ident_pk_with } from "../db";
-import { db_backoff_sql, db_fs_sharded_lazy_bunfile, db_backoff } from "../db_misc";
-import { sql } from "drizzle-orm";
-import { run_with_concurrency_limit } from "../pass";
-import { ProgressRef } from "../server";
-import { mime_ext } from "../mime";
+import { FSRef, Ident, ImageKind } from "../types"
+import { db } from "../db"
+import { db_fs_sharded_lazy_bunfile } from "../db_misc"
+import { sql } from "drizzle-orm"
+import { ProgressRef } from "../server"
+import { mime_ext } from "../mime"
+import { run_with_concurrency_limit } from "../util"
+import { $images } from "../schema"
 
 // images with hash as a URL will be weeded out in further passes
-export function db_images_append_url(pk: SQLiteTable, pk_id: string | number, kind: ImageKind, url: string, width: number, height: number) {
-	db.insert(schema.images)
+export function db_images_append_url(ident: Ident, kind: ImageKind, url: string, width: number, height: number) {
+	db.insert($images)
 		.values({
-			hash: url as FSHash,
-			ident: db_ident_pk_with(pk, pk_id),
-			kind: kind,
-			width: width,
-			height: height,
+			hash: url as FSRef,
+			ident,
+			kind,
+			width,
+			height,
 		})
 		.onConflictDoNothing()
 		.run()
@@ -26,8 +25,8 @@ export function db_images_append_url(pk: SQLiteTable, pk_id: string | number, ki
 export async function pass_images_download_url_to_hash() {
 	// case exact glob results in "SEARCH"ing through using our index
 	let update = false
-	const urls = db.select({ hash: schema.images.hash })
-		.from(schema.images)
+	const urls = db.select({ hash: $images.hash })
+		.from($images)
 		.where(sql`hash glob 'http://*' or hash glob 'https://*'`)
 		.all()
 
@@ -42,7 +41,7 @@ export async function pass_images_download_url_to_hash() {
 
 		if (!resp.ok) {
 			// delete the entry
-			db.delete(schema.images)
+			db.delete($images)
 				.where(sql`hash = ${hash}`)
 				.run()
 			return
@@ -54,7 +53,7 @@ export async function pass_images_download_url_to_hash() {
 		await Bun.write(file, resp)
 
 		// update in place
-		db.update(schema.images)
+		db.update($images)
 			.set({ hash: new_hash })
 			.where(sql`hash = ${hash}`)
 			.run()

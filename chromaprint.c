@@ -6,8 +6,6 @@ SQLITE_EXTENSION_INIT1
 #include <stdint.h>
 #include <string.h>
 
-// TODO: port fcompare.ts to C to use inside sqlite
-
 // no stdbit :(
 // #include <stdbit.h>
 
@@ -35,14 +33,6 @@ static inline void *sqlite3_malloc0(int size) {
 		memset(ptr, 0, size);
 	}
 	return ptr;
-}
-
-static void hdist32(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
-	uint32_t a = sqlite3_value_int(argv[0]);
-	uint32_t b = sqlite3_value_int(argv[1]);
-
-	uint32_t hdist = popcnt(a ^ b);
-	sqlite3_result_int(ctx, hdist);
 }
 
 // ported from https://github.com/acoustid/pg_acoustid to sqlite3
@@ -183,9 +173,8 @@ dealloc:
 #ifdef _WIN32
 __declspec(dllexport)
 #endif
-int sqlite3_hdist_init(sqlite3 *db, char **pz_err_msg, const sqlite3_api_routines *p_api) {
+int sqlite3_chromaprint_init(sqlite3 *db, char **pz_err_msg, const sqlite3_api_routines *p_api) {
 	SQLITE_EXTENSION_INIT2(p_api)
-	sqlite3_create_function(db, "hdist32", 2, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, NULL, hdist32, NULL, NULL);
 	sqlite3_create_function(db, "acoustid_compare2", 3, SQLITE_UTF8 | SQLITE_DETERMINISTIC, NULL, acoustid_compare2, NULL, NULL);
 	return SQLITE_OK;
 }

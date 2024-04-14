@@ -2,8 +2,9 @@ import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import { Database } from 'bun:sqlite'
 import * as schema from './schema'
-import { LiteralHash, UniFK } from './types'
+import { $spotify_artist, $spotify_album, $youtube_video, $youtube_channel, $images, $sources, $karent_album, $karent_artist, $links, $spotify_track, $vocadb_song, $vocadb_album, $vocadb_artist } from './schema'
 import { SQLiteTable } from 'drizzle-orm/sqlite-core'
+import { Ident } from './types'
 
 const sqlite: Database = new Database('db.sqlite', { create: false, readwrite: true })
 
@@ -13,7 +14,7 @@ sqlite.exec("pragma synchronous = normal;") // safe with WAL
 sqlite.exec("pragma temp_store = memory;")
 sqlite.exec("pragma mmap_size = 30000000000;")
 //sqlite.exec("pragma auto_vacuum = incremental;") // TODO: needs to be set at db creation before tables, so why call it here?
-sqlite.loadExtension("./hdist.so") // hdist.c
+sqlite.loadExtension("./chromaprint") // chromaprint.c
 
 export const db: BunSQLiteDatabase<typeof schema> = drizzle(sqlite, { schema })
 
@@ -30,25 +31,28 @@ export function db_close() {
 
 const WYHASH_SEED = 761864364875522238n
 
-export function db_hash(s: string): LiteralHash {
-	return Bun.hash.wyhash(s, WYHASH_SEED) as LiteralHash
-}
-
 // ensure lengths are 3
 export function db_ident_pk(table: SQLiteTable) {
 	switch (table) {
-		case schema.youtube_video:   return 'yv/'
-		case schema.youtube_channel: return 'yc/'
-		case schema.images:          return 'im/'
-		case schema.sources:         return 'so/'
-		case schema.karent_album:    return 'kl/'
-		case schema.karent_artist:   return 'ka/'
+		case $youtube_video:   return 'yv/'
+		case $youtube_channel: return 'yc/'
+		case $images:          return 'im/'
+		case $sources:         return 'so/'
+		case $karent_album:    return 'ka/'
+		case $karent_artist:   return 'kr/'
+		case $spotify_track:   return 'st/'
+		case $spotify_album:   return 'sa/'
+		case $spotify_artist:  return 'sr/'
+		case $links:		   return 'lk/'
+		case $vocadb_song:     return 'vs'
+		case $vocadb_album:    return 'va'
+		case $vocadb_artist:   return 'vr'
 		default: {
 			throw new Error(`unknown table ${table}`)
 		}
 	}
 }
 
-export function db_ident_pk_with(table: SQLiteTable, id: string | number): UniFK {
-	return (db_ident_pk(table) + id) as UniFK
+export function db_ident_pk_with(table: SQLiteTable, id: string | number): Ident {
+	return (db_ident_pk(table) + id) as Ident
 }

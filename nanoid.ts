@@ -21,7 +21,7 @@
  *  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  **/
 // nanoID is a unique string ID generator, taken for use from a MIT licensed source
-export function nanoid(size = 21) {
+export function nanoid(size = 18 /* 21 */) {
 	// CHANGE: `=` instead of `-`, the dash causes fuckups when appearing at the start of a CLI arg
 	const alph = "useandom=26T198340PX75pxJACKVERYMINDBUSHWOLF_GQZbfghjklqvwyzrict"
 	const r = crypto.getRandomValues(new Uint8Array(size))

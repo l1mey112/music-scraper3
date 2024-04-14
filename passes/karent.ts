@@ -1,9 +1,10 @@
 import { sql } from "drizzle-orm"
 import { db } from "../db"
-import * as schema from '../schema'
-import { db_backoff_sql, db_backoff, db_links_append, Backoff } from "../db_misc"
+import { db_links_append } from "../db_misc"
 import { ProgressRef } from "../server"
-import { run_with_concurrency_limit } from "../pass"
+import { db_backoff_forever, db_backoff_sql, run_with_concurrency_limit } from "../util"
+import { $karent_album } from "../schema"
+import { Ident } from "../types"
 
 // can't directly pass a Response, because for some reason HTMLRewriter
 // doesn't actually compute anything until much later
@@ -36,9 +37,12 @@ function karent_extract_derived_urls(html: string) {
 export async function pass_karent_album_meta_karent_album() {
 	const DIDENT = 'karent_album.meta.karent_album'
 
-	const k = db.select({ id: schema.karent_album.id })
-		.from(schema.karent_album)
-		.where(db_backoff_sql(schema.karent_album, schema.karent_album.id, DIDENT))
+	// karent albums, like most distributors, don't have their data changing
+	// its quite rare, just issue infinite backoffs
+
+	const k = db.select({ id: $karent_album.id })
+		.from($karent_album)
+		.where(db_backoff_sql(DIDENT, $karent_album, $karent_album.id))
 		.all()
 
 	if (k.length == 0) {
@@ -49,17 +53,24 @@ export async function pass_karent_album_meta_karent_album() {
 
 	await run_with_concurrency_limit(k, 5, pc, async ({ id }) => {
 		const resp = await fetch(`https://karent.jp/album/${id}`)
-		
+
 		if (!resp.ok) {
-			throw new Error(`karent album req failed`)
+			db.delete($karent_album)
+				.where(sql`id = ${id}`)
+				.run()
+			return
 		}
+
+		const ident = ('ka/' + id) as Ident
 
 		// TODO: i don't like this...
 		const text = await resp.text()
 		const derived_urls = karent_extract_derived_urls(text)
 
-		db_links_append(schema.karent_album, id, derived_urls)
-		db_backoff(schema.karent_album, id, DIDENT, Backoff.Complete)
+		db.transaction(db => {
+			db_links_append($karent_album, id, derived_urls)
+			db_backoff_forever(DIDENT, ident)
+		})
 	})
 
 	pc.close()

@@ -1,110 +1,151 @@
-import { index, sqliteTable, text, integer, blob, real, unique, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core";
-import { LiteralHash, ImageKind, UniFK, YoutubeChannelId, YoutubeVideoId, FSHash, SpotifyArtistId, SpotifyAlbumId, SpotifyTrackId, KarentAlbumId, TrackId, AudioFingerprintId } from "./types";
+import { index, sqliteTable, text, integer, blob, real, unique, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { WyHash, ImageKind, Ident, YoutubeChannelId, YoutubeVideoId, FSRef, SpotifyArtistId, SpotifyAlbumId, SpotifyTrackId, TrackId, AudioFingerprintId, LinkKind, KarentAlbumId, KarentArtistId, LocalePart, AlbumId, ArtistId, Locale, LinkId } from "./types";
+import { sql } from "drizzle-orm";
 
 // .references(() => youtube_channel.id),
 // these are no-ops in sqlite, they don't create indexes
 // a default index is created on primary keys anyway
 
-export const track = sqliteTable('track', {
+export const $track = sqliteTable('track', {
 	id: integer('id').$type<TrackId>().notNull(),
 
 	// more fields...
 })
 
-export const name = sqliteTable('name', {
-	ident: text('ident').$type<UniFK>().primaryKey(),
-	locale: text('locale').notNull(),
-	name: text('text').notNull(),
+// TODO: needs joining table
+export const $album = sqliteTable('album', {
+	id: integer('id').$type<AlbumId>().notNull(),
+
+	// more fields...
+})
+
+export const $artist = sqliteTable('artist', {
+	id: integer('id').$type<ArtistId>().notNull(),
+
+	// more fields...
+})
+
+// WITHOUT-ROWID: i10n
+export const $i10n = sqliteTable('i10n', {
+	ident: text('ident').$type<Ident>().notNull(),
+	locale: text('locale').$type<Locale>().notNull(),
+	part: integer('part').$type<LocalePart>().notNull(),
+	text: text('text').notNull(),
 }, (t) => ({
-	uniq: unique("name.uniq").on(t.ident, t.locale)
+	pk: primaryKey({ columns: [t.ident, t.locale, t.part] }),
+}))
+
+// compound unique works on columns individually, which is fucking stupid
+// you need to use composite primary key
+
+// for a unique id we have two choices
+// 1. randomised integer
+// 2. hash the three fields
+
+export const $links = sqliteTable('links', {
+	id: integer('id').$type<LinkId>().primaryKey(),
+	ident: text('ident').$type<Ident>().notNull(),
+	kind: text('kind').$type<LinkKind>().notNull(),
+	data: text('data').notNull(),
+}, (t) => ({
+	uniq: unique('links.uniq').on(t.ident, t.kind, t.data)
 }))
 
 // WITHOUT-ROWID: karent_artist
-export const karent_artist = sqliteTable('karent_artist', {
-	id: text('id').$type<KarentAlbumId>().primaryKey(),
+export const $karent_artist = sqliteTable('karent_artist', {
+	id: text('id').$type<KarentArtistId>().primaryKey(),
+	artist_id: integer('artist_id').$type<ArtistId>(),
 })
 
 // WITHOUT-ROWID: karent_album
-export const karent_album = sqliteTable('karent_album', {
+export const $karent_album = sqliteTable('karent_album', {
 	id: text('id').$type<KarentAlbumId>().primaryKey(),
+	album_id: integer('album_id').$type<AlbumId>(),
 })
 
 // WITHOUT-ROWID: spotify_artist
-export const spotify_artist = sqliteTable('spotify_artist', {
+export const $spotify_artist = sqliteTable('spotify_artist', {
 	id: text('id').$type<SpotifyArtistId>().primaryKey(),
-
-	//name: text('name'),
+	artist_id: integer('artist_id').$type<ArtistId>(),
 })
 
 // WITHOUT-ROWID: spotify_album
-export const spotify_album = sqliteTable('spotify_album', {
+export const $spotify_album = sqliteTable('spotify_album', {
 	id: text('id').$type<SpotifyAlbumId>().primaryKey(),
-
-	//name: text('name'),
+	album_id: integer('album_id').$type<AlbumId>(),
 })
 
 // WITHOUT-ROWID: spotify_track
-export const spotify_track = sqliteTable('spotify_track', {
+export const $spotify_track = sqliteTable('spotify_track', {
 	id: text('id').$type<SpotifyTrackId>().primaryKey(),
-
-	//name: text('name'),
+	track_id: integer('track_id').$type<TrackId>(),
 })
 
 // WITHOUT-ROWID: youtube_video
-export const youtube_video = sqliteTable('youtube_video', {
+export const $youtube_video = sqliteTable('youtube_video', {
 	id: text('id').$type<YoutubeVideoId>().primaryKey(),
-	channel_id: text('channel_id').$type<YoutubeChannelId>(),
+	track_id: integer('track_id').$type<TrackId>(),
 
-	name: text('name'),
-	description: text('description'),
+	channel_id: text('channel_id').$type<YoutubeChannelId>(),
 })
 
 // WITHOUT-ROWID: youtube_channel
-export const youtube_channel = sqliteTable('youtube_channel', {
+export const $youtube_channel = sqliteTable('youtube_channel', {
 	id: text('id').$type<YoutubeChannelId>().primaryKey(),
+	artist_id: integer('artist_id').$type<ArtistId>(),
 
-	name: text('name'), // display name
 	handle: text('handle'), // @pinocchiop
-	description: text('description'),
 })
 
-// pass backoff for metadata
+// WITHOUT-ROWID: vocadb_song
+export const $vocadb_song = sqliteTable('vocadb_song', {
+	id: integer('id').primaryKey(),
+	track_id: integer('track_id').$type<TrackId>(),
+})
+
+// WITHOUT-ROWID: vocadb_album
+export const $vocadb_album = sqliteTable('vocadb_album', {
+	id: integer('id').primaryKey(),
+	album_id: integer('album_id').$type<AlbumId>(),
+})
+
+// WITHOUT-ROWID: vocadb_artist
+export const $vocadb_artist = sqliteTable('vocadb_artist', {
+	id: integer('id').primaryKey(),
+	artist_id: integer('artist_id').$type<ArtistId>(),
+})
+
 // its safe to clear these out, it'll just cause a re-fetch
 // there is no race conditions if you ran a cleanup pass at the end, you're at no risk
-export const pass_backoff = sqliteTable('pass_backoff', {
+export const $retry_backoff = sqliteTable('retry_backoff', {
 	issued: integer('issued').notNull(),
 	expire: integer('expire'), // null for never
 
-	ident: text('ident').$type<UniFK>().notNull(),
-	pass: integer('pass').$type<LiteralHash>().notNull(), // wyhash integer
+	ident: text('ident').$type<Ident>().notNull(),
+	pass: integer('pass').$type<WyHash>().notNull(), // wyhash integer
 }, (t) => ({
-	pidx: index("pass_backoff.full_idx").on(t.expire, t.pass, t.ident),
+	unq: unique("retry_backoff.unq").on(t.ident, t.pass),
+	pidx: index("retry_backoff.full_idx").on(t.expire, t.pass, t.ident),
 }))
 
 // persistent store
-// WITHOUT-ROWID: thirdparty:store
-export const thirdparty_store = sqliteTable('thirdparty:store', {
+// WITHOUT-ROWID: kv_store
+export const $kv_store = sqliteTable('kv_store', {
 	kind: text('kind').primaryKey(),
 	data: text('data', { mode: 'json' }).notNull(),
 })
-
-// WITHOUT-ROWID: links
-export const links = sqliteTable('links', {
-	ident: text('ident').$type<UniFK>().notNull(),
-	kind: text('kind').notNull(),
-	data: text('data').notNull(),
-}, (t) => ({
-	pidxuni: primaryKey({ columns: [t.ident, t.kind, t.data] }),
-}))
 
 // hash can either be an FSHash or a URL gated behind a pass to defer downloading
 // if it fails, no backoff just delete the entry
 // check if starts with https:// or http:// (nanoid has no //)
 
+// TODO: image perceptual hash to remove duplicates after download
+//       can easily find one and have it stores inside the table
+
 // WITHOUT-ROWID: images
-export const images = sqliteTable('images', {
-	hash: text('hash').$type<FSHash>().primaryKey(),
-	ident: text('ident').$type<UniFK>().notNull(),
+export const $images = sqliteTable('images', {
+	hash: text('hash').$type<FSRef>().primaryKey(),
+	ident: text('ident').$type<Ident>().notNull(),
 	kind: text('kind').$type<ImageKind>().notNull(),
 	width: integer('width').notNull(),
 	height: integer('height').notNull(),
@@ -116,9 +157,9 @@ export const images = sqliteTable('images', {
 
 // a source is a video/audio file, always containing some form of audio
 // WITHOUT-ROWID: sources
-export const sources = sqliteTable('sources', {
-	hash: text('hash').$type<FSHash>().primaryKey(),
-	ident: text('ident').$type<UniFK>().notNull(),
+export const $sources = sqliteTable('sources', {
+	hash: text('hash').$type<FSRef>().primaryKey(),
+	ident: text('ident').$type<Ident>().notNull(),
 	track_id: integer('track_id').$type<TrackId>(),
 	width: integer('width'),
 	height: integer('height'),
@@ -139,7 +180,7 @@ export const sources = sqliteTable('sources', {
 // rowid is beneficial here. forces integer type (no affinity) on the PK
 // and because we're storing big data in here (>200 bytes on 4KiB page)
 // https://www.sqlite.org/withoutrowid.html
-export const audio_fingerprint = sqliteTable('audio_fingerprint', {
+export const $audio_fingerprint = sqliteTable('audio_fingerprint', {
 	id: integer('id').$type<AudioFingerprintId>().primaryKey(),
 	chromaprint: blob('chromaprint').$type<Uint8Array>().notNull(),
 	duration_s: real('duration_s').notNull(), // not accurate to sources, but within 7 seconds

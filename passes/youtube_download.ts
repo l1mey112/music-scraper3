@@ -1,17 +1,17 @@
 import { sql } from "drizzle-orm"
 import { db } from "../db"
-import * as schema from '../schema'
-import { run_with_concurrency_limit } from "../pass"
+import { $youtube_video, $sources } from '../schema'
+import { run_with_concurrency_limit } from "../util"
 import { ProgressRef } from "../server"
-import { FSHash, Override, UniFK } from "../types"
+import { FSRef, Ident } from "../types"
 import * as YTDlpWrap from "yt-dlp-wrap";
 import { db_fs_sharded_path_noext_nonlazy } from "../db_misc"
 
 // sources.download.from_youtube_video
 export async function pass_sources_download_from_youtube_video() {
-	const k = db.select({ id: schema.youtube_video.id })
-		.from(schema.youtube_video)
-		.where(sql`('yv/' || ${schema.youtube_video.id}) not in (select ${schema.sources.ident} from ${schema.sources})`)
+	const k = db.select({ id: $youtube_video.id })
+		.from($youtube_video)
+		.where(sql`('yv/' || ${$youtube_video.id}) not in (select ${$sources.ident} from ${$sources})`)
 		.all()
 
 	if (k.length == 0) {
@@ -48,12 +48,12 @@ export async function pass_sources_download_from_youtube_video() {
 		const output_s = await ytdl.execPromise(args)
 
 		const output: Output = JSON.parse(output_s)
-		const hash = (hash_part + '.' + output.ext) as FSHash
+		const hash = (hash_part + '.' + output.ext) as FSRef
 
-		db.insert(schema.sources)
+		db.insert($sources)
 			.values({
 				hash: hash,
-				ident: ("yv/" + id) as UniFK,
+				ident: ("yv/" + id) as Ident,
 				width: output.width,
 				height: output.height,
 				bitrate: output.bitrate,

@@ -1,4 +1,4 @@
-import * as schema from './schema'
+import { $kv_store } from './schema'
 import { db } from "./db"
 import { component_invalidate, component_register, emit_log, route_register } from "./server"
 import { sql } from 'drizzle-orm'
@@ -15,8 +15,8 @@ function cred_db_get(): CredentialStore {
 		'deezer_arl': [],
 	}
 
-	const cred = db.select({ data: schema.thirdparty_store.data })
-		.from(schema.thirdparty_store)
+	const cred = db.select({ data: $kv_store.data })
+		.from($kv_store)
 		.where(sql`kind = 'cred'`)
 		.get() as { data: CredentialStore } | undefined
 	
@@ -29,10 +29,10 @@ function cred_db_get(): CredentialStore {
 }
 
 function cred_db_set(store: CredentialStore) {
-	db.insert(schema.thirdparty_store)
+	db.insert($kv_store)
 		.values({ kind: 'cred', data: store })
 		.onConflictDoUpdate({
-			target: schema.thirdparty_store.kind,
+			target: $kv_store.kind,
 			set: { data: store }
 		})
 		.run()

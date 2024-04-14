@@ -1,10 +1,11 @@
 import { sql } from "drizzle-orm"
 import { db } from "../db"
-import * as schema from '../schema'
 import { ProgressRef } from "../server"
-import { run_with_concurrency_limit, run_with_throughput_limit } from "../pass"
 import { $ } from 'bun'
-import { db_backoff_sql, db_fs_hash_path, db_backoff, Backoff } from "../db_misc"
+import { db_backoff_forever, db_backoff_sql, run_with_concurrency_limit } from "../util"
+import { $audio_fingerprint, $sources } from "../schema"
+import { db_fs_hash_path } from "../db_misc"
+import { Ident } from "../types"
 
 // sources.classify.audio_fingerprint
 export async function pass_sources_classify_audio_fingerprint() {
@@ -12,18 +13,20 @@ export async function pass_sources_classify_audio_fingerprint() {
 
 	// will issue backoffs for fingerprints that don't match criteria
 
-	const k = db.select({ hash: schema.sources.hash })
-		.from(schema.sources)
-		.where(sql`${schema.sources.fingerprint} is null and ${db_backoff_sql(schema.sources, schema.sources.ident, DIDENT)}`)
-		.all()
-	
-	if (k.length == 0) {
-		return false
-	}
+	// could just issue a backoff for all fingerprints, but that will bloat the backoff table
+	// just check for fingerprint is null, then assign backoffs to genuine failures
 
-	const pc = new ProgressRef('sources.classify.audio_fingerprint')
+	let updated = false
+	const k = db.select({ hash: $sources.hash })
+		.from($sources)
+		.where(sql`${$sources.fingerprint} is null and ${db_backoff_sql(DIDENT, $sources, $sources.hash)}`)
+		.all()
+
+	const pc = new ProgressRef(DIDENT)
 
 	await run_with_concurrency_limit(k, 10, pc, async ({ hash }) => {
+		const ident = ('so/' + hash) as Ident
+
 		const fpcalc = await $`fpcalc -algorithm 2 -length 180 -raw -json ${db_fs_hash_path(hash)}`.quiet()
 
 		type FpCalc = {
@@ -44,35 +47,39 @@ export async function pass_sources_classify_audio_fingerprint() {
 		// accuracy diminishes below 25 seconds (reported 15-30, intuition 20, meet in the middle of 25)
 		// at least 80 unique items
 		if (json.duration < 25 || new Set(fingerprint).size < 80) {
-			db_backoff(schema.sources, hash, DIDENT, Backoff.Forever)
+			db_backoff_forever(DIDENT, ident)
 			return
 		}
 
-		const g = db.insert(schema.audio_fingerprint)
-			.values({ chromaprint: new Uint8Array(fingerprint.buffer), duration_s: json.duration })
-			.returning()
-			.get()
+		db.transaction(db => {
+			const g = db.insert($audio_fingerprint)
+				.values({ chromaprint: new Uint8Array(fingerprint.buffer), duration_s: json.duration })
+				.returning()
+				.get()
 
-		db.update(schema.sources)
-			.set({ fingerprint: g.id })
-			.where(sql`${schema.sources.hash} = ${hash}`)
-			.run()
+			db.update($sources)
+				.set({ fingerprint: g.id })
+				.where(sql`${$sources.hash} = ${hash}`)
+				.run()
+		})
+
+		updated = true
 	})
 
 	pc.close()
 
-	return false
+	return updated
 }
 
 // acoustid API only supports integer durations, but fpcalc returns float durations ???
 
 // sources.classify.yv_chromaprint_to_acoustid
 /* export async function pass_sources_classify_yv_chromaprint_to_acoustid() {
-	const k = db.select({ hash: schema.sources.hash, chromaprint: schema.sources.chromaprint, chromaprint_duration: schema.sources.chromaprint_duration })
-		.from(schema.sources)
-		.where(sql`${schema.sources.chromaprint} is not null and ${schema.sources.chromaprint_duration} is not null and ${schema.sources.ident} like 'yv/%'
-			and ${schema.sources.acoustid} is null
-			and ${db_backoff_sql(schema.sources, schema.sources.hash, 'sources.classify.yv_chromaprint_to_acoustid')}`)
+	const k = db.select({ hash: sources.hash, chromaprint: sources.chromaprint, chromaprint_duration: sources.chromaprint_duration })
+		.from(sources)
+		.where(sql`${sources.chromaprint} is not null and ${sources.chromaprint_duration} is not null and ${sources.ident} like 'yv/%'
+			and ${sources.acoustid} is null
+			and ${db_backoff_sql(sources, sources.hash, 'sources.classify.yv_chromaprint_to_acoustid')}`)
 		.all()
 
 	if (k.length == 0) {
@@ -107,13 +114,13 @@ export async function pass_sources_classify_audio_fingerprint() {
 		// no match
 		const res = json.results[0]
 		if (!res || res.score < 0.65) {
-			db_register_backoff(schema.sources, hash, 'sources.classify.yv_chromaprint_to_acoustid')
+			db_register_backoff(sources, hash, 'sources.classify.yv_chromaprint_to_acoustid')
 			return
 		}
 
-		db.update(schema.sources)
+		db.update(sources)
 			.set({ acoustid: res.id })
-			.where(sql`${schema.sources.hash} = ${hash}`)
+			.where(sql`${sources.hash} = ${hash}`)
 			.run()
 
 		// can return multiple results or zero results

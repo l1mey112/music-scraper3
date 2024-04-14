@@ -1,30 +1,118 @@
-import * as schema from './schema'
-
+import { $i10n, $links } from "./schema";
 
 // misc
 export type MaybePromise<T> = T | Promise<T>
 export type Override<T1, T2> = Omit<T1, keyof T2> & T2;
-export type NewType<T> = T & { readonly __newtype: unique symbol }
+export type NewType<K, T> = T & { readonly __newtype: K }
 
-export type UniFK = NewType<string> // permanent identifier
+export type TrackId = NewType<'TrackId', number>
+export type AlbumId = NewType<'AlbumId', number>
+export type ArtistId = NewType<'ArtistId', number>
 
-export type KarentAlbumId = string
-export type SpotifyArtistId = string
-export type SpotifyAlbumId = string
-export type SpotifyTrackId = string
-export type YoutubeVideoId = string
-export type YoutubeChannelId = string
-
-export type TrackId = NewType<number>
-export type AudioFingerprintId = NewType<number>
-
-export type ImageKind = 'yt_thumbnail' | 'yt_avatar' | 'yt_banner' | 'yt_tv_banner' | 'yt_mobile_banner' // | ...
-
-export type LiteralHash = NewType<bigint>
-export type FSHash = NewType<string>
+export type LinkId = NewType<'LinkId', number>
 
 type PassField = 'all' | 'track' | 'album' | 'artist' | 'karent_album' | 'karent_artist' | 'youtube_video' | 'youtube_channel' | 'links' | 'images' | 'sources'
 type PassKind = 'meta' | 'extrapolate' | 'download' | 'classify'
 export type PassIdentifier = `${PassField}.${PassKind}.${string}`
 
-export type Link = typeof schema.links.$inferInsert
+export type Ident = NewType<'Ident', string>
+
+export type KarentArtistId = NewType<'KarentArtistId', string>
+export type KarentAlbumId = NewType<'KarentAlbumId', string>
+export type SpotifyArtistId = NewType<'SpotifyArtistId', string>
+export type SpotifyAlbumId = NewType<'SpotifyAlbumId', string>
+export type SpotifyTrackId = NewType<'SpotifyTrackId', string>
+export type YoutubeVideoId = NewType<'YoutubeVideoId', string>
+export type YoutubeChannelId = NewType<'YoutubeChannelId', string>
+export type AudioFingerprintId = NewType<'AudioFingerprintId', number>
+
+const image_kind_tostring = {
+	yt_thumbnail: 'YouTube Thumbnail',
+	yt_avatar: 'YouTube Avatar',
+	yt_banner: 'YouTube Banner',
+	yt_tv_banner: 'YouTube TV Banner',
+	yt_mobile_banner: 'YouTube Mobile Banner',
+}
+
+export type ImageKind = keyof typeof image_kind_tostring
+export function imagekind_tostring(kind: ImageKind): string {
+	return image_kind_tostring[kind]
+}
+
+export type FSRef = NewType<'FSHash', string>
+
+// see locale.ts
+// Locale is a IETF language subtag (e.g. en, jp)
+// unknown locales are represented as `--`
+export const LocaleNone = '--' as Locale
+export type Locale = NewType<'Locale', '--' | string>
+
+const link_kind_tostring = {
+	yt_video_id: 'YouTube Video',
+	yt_channel_id: 'YouTube Channel',
+	yt_playlist_id: 'YouTube Playlist',
+	sp_track_id: 'Spotify Track',
+	sp_album_id: 'Spotify Album',
+	sp_artist_id: 'Spotify Artist',
+	ap_album_id: 'Apple Music Album',
+	ka_album_id: 'Karent Album',
+	ka_artist_id: 'Karent Artist',
+	vd_song_id: 'VocaDB Song Entry',
+	vd_album_id: 'VocaDB Album Entry',
+	vd_artist_id: 'VocaDB Artist Entry',
+	pi_item_id: 'Piapro Item',
+	pi_creator: 'Piapro Creator',
+	ni_video_id: 'Niconico Video',
+	ni_user_id: 'Niconico User',
+	ni_material_id: 'Niconico Material',
+	tw_user: 'Twitter User',
+	tc_linkcore: 'Linkcore', // tunecore JP
+	lf_lnk_to: 'Linkfire (lnk.to)',
+	lf_lnk_toc: 'Linkfire (lnk.to)', // composite `${string}/${string}`
+	unknown: 'Unknown URL',
+}
+
+export type Link = typeof $links.$inferInsert
+export type I10n = typeof $i10n.$inferInsert
+
+export type LinkKind = keyof typeof link_kind_tostring
+export function linkkind_tostring(kind: LinkKind): string {
+	return link_kind_tostring[kind]
+}
+
+/* export function linkkind_url(kind: LinkKind, data: string): string {
+	switch (kind) {
+		case 'yt_video_id':    return `https://www.youtube.com/watch?v=${data}`
+		case 'yt_channel_id':  return `https://www.youtube.com/channel/${data}`
+		case 'yt_playlist_id': return `https://www.youtube.com/playlist?list=${data}`
+		case 'sp_track_id':    return `https://open.spotify.com/track/${data}`
+		case 'sp_album_id':    return `https://open.spotify.com/album/${data}`
+		case 'sp_artist_id':   return `https://open.spotify.com/artist/${data}`
+		case 'ap_album_id':    return `https://music.apple.com/album/${data}`
+		case 'ka_album_id':    return `https://karent.jp/album/${data}`
+		case 'ka_artist_id':   return `https://karent.jp/artist/${data}`
+		case 'vd_song_id':     throw null // TODO
+		case 'vd_album_id':    throw null // TODO
+		case 'vd_artist_id':   throw null // TODO
+		case 'pi_item_id':     throw null // TODO
+		case 'pi_creator':     throw null // TODO
+		case 'ni_video_id':    throw null // TODO
+		case 'ni_user_id':     throw null // TODO
+		case 'ni_material_id': throw null // TODO
+		case 'tw_user':        throw null // TODO
+		case 'tc_linkcore':    throw null // TODO
+		case 'lf_lnk_to':      throw null // TODO
+		case 'lf_lnk_toc':     throw null // TODO
+		case 'unknown':        throw null // TODO
+	}
+} */
+
+export enum LocalePart {
+	name,
+	description,
+}
+
+export type WyHash = NewType<'WyHash', bigint> // 64 bit integer
+
+export const HOURS = 1000 * 60 * 60
+export const DAYS = HOURS * 24
