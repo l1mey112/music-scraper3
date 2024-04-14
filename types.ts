@@ -22,9 +22,15 @@ export type KarentAlbumId = NewType<'KarentAlbumId', string>
 export type SpotifyArtistId = NewType<'SpotifyArtistId', string>
 export type SpotifyAlbumId = NewType<'SpotifyAlbumId', string>
 export type SpotifyTrackId = NewType<'SpotifyTrackId', string>
+export type VocaDBArtistId = NewType<'VocaDBArtistId', string>
+export type VocaDBAlbumId = NewType<'VocaDBAlbumId', string>
+export type VocaDBSongId = NewType<'VocaDBSongId', string>
 export type YoutubeVideoId = NewType<'YoutubeVideoId', string>
 export type YoutubeChannelId = NewType<'YoutubeChannelId', string>
 export type AudioFingerprintId = NewType<'AudioFingerprintId', number>
+
+export type ArtistList<T> = T[]
+export type AlbumTracks<T> = { disc: number, i: number, id: T }[] // usually 1 indexed
 
 const image_kind_tostring = {
 	yt_thumbnail: 'YouTube Thumbnail',
@@ -32,6 +38,8 @@ const image_kind_tostring = {
 	yt_banner: 'YouTube Banner',
 	yt_tv_banner: 'YouTube TV Banner',
 	yt_mobile_banner: 'YouTube Mobile Banner',
+	cover_art: 'Cover Art',
+	profile_art: 'Profile Art',
 }
 
 export type ImageKind = keyof typeof image_kind_tostring

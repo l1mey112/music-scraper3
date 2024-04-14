@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm"
-import { db } from "../db"
+import { db, db_ident_pk, db_ident_pk_with } from "../db"
 import { db_links_append } from "../db_misc"
 import { ProgressRef } from "../server"
-import { db_backoff_forever, db_backoff_sql, run_with_concurrency_limit } from "../util"
+import { db_backoff_forever, db_backoff_or_delete, db_backoff_sql, run_with_concurrency_limit } from "../util"
 import { $karent_album } from "../schema"
 import { Ident } from "../types"
 
@@ -55,13 +55,11 @@ export async function pass_karent_album_meta_karent_album() {
 		const resp = await fetch(`https://karent.jp/album/${id}`)
 
 		if (!resp.ok) {
-			db.delete($karent_album)
-				.where(sql`id = ${id}`)
-				.run()
+			db_backoff_or_delete(DIDENT, $karent_album, $karent_album.id, id)
 			return
 		}
 
-		const ident = ('ka/' + id) as Ident
+		const ident = db_ident_pk_with($karent_album, id)
 
 		// TODO: i don't like this...
 		const text = await resp.text()

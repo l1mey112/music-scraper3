@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm"
-import { db } from "../db"
+import { db, db_ident_pk_with } from "../db"
 import { ProgressRef } from "../server"
 import { link_delete, link_insert } from "./links"
-import { db_backoff_forever, db_backoff_sql, run_with_concurrency_limit } from "../util"
+import { db_backoff_forever, db_backoff_or_delete as db_backoff_forever_or_delete, db_backoff_sql, run_with_concurrency_limit } from "../util"
 import { $links } from "../schema"
 import { Ident, Link, LinkKind } from "../types"
 
@@ -38,7 +38,7 @@ export async function pass_links_extrapolate_from_linkcore() {
 	const pc = new ProgressRef(DIDENT)
 
 	await run_with_concurrency_limit(k, 5, pc, async (link) => {
-		const ident = ('lk/' + link.id) as Ident
+		const ident = db_ident_pk_with($links, link.id)
 
 		const derived_urls: string[] = []
 
@@ -55,7 +55,7 @@ export async function pass_links_extrapolate_from_linkcore() {
 		await db.transaction(async db => {
 			const resp = await fetch(`https://linkco.re/${link.data}`)
 			if (!resp.ok) {
-				link_delete(link.id)
+				db_backoff_forever_or_delete(DIDENT, $links, $links.id, link.id)
 				return
 			}
 
@@ -129,7 +129,7 @@ export async function pass_links_extrapolate_from_lnk_to() {
 
 			const resp = await fetch(url)
 			if (!resp.ok) {
-				link_delete(link.id)
+				db_backoff_forever_or_delete(DIDENT, $links, $links.id, link.id)
 				return
 			}
 

@@ -8,6 +8,7 @@ sh/killschema.sh
 
 stmts=(
 	"insert into youtube_video (id) values ('0qYl0rqLcQs'), ('p-o_bMkzOW0'), ('Or5lCqWyYE8'), ('LnkUf8I8e_U'), ('qj1GooBp0ss'), ('0BYfmmGLm1Y');"
+	#"insert into vocadb_album (id) values (18033)"
 )
 
 for stmt in "${stmts[@]}"; do

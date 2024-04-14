@@ -1,5 +1,5 @@
 import { index, sqliteTable, text, integer, blob, real, unique, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { WyHash, ImageKind, Ident, YoutubeChannelId, YoutubeVideoId, FSRef, SpotifyArtistId, SpotifyAlbumId, SpotifyTrackId, TrackId, AudioFingerprintId, LinkKind, KarentAlbumId, KarentArtistId, LocalePart, AlbumId, ArtistId, Locale, LinkId } from "./types";
+import { WyHash, ImageKind, Ident, YoutubeChannelId, YoutubeVideoId, FSRef, SpotifyArtistId, SpotifyAlbumId, SpotifyTrackId, TrackId, AudioFingerprintId, LinkKind, KarentAlbumId, KarentArtistId, LocalePart, AlbumId, ArtistId, Locale, LinkId, ArtistList, VocaDBSongId, VocaDBAlbumId, VocaDBArtistId, AlbumTracks } from "./types";
 import { sql } from "drizzle-orm";
 
 // .references(() => youtube_channel.id),
@@ -24,6 +24,9 @@ export const $artist = sqliteTable('artist', {
 
 	// more fields...
 })
+
+// TODO: it would be nice to have a nullable `locale` instead of `--`
+//       null isn't comparable to anything, so it works fine
 
 // WITHOUT-ROWID: i10n
 export const $i10n = sqliteTable('i10n', {
@@ -99,20 +102,27 @@ export const $youtube_channel = sqliteTable('youtube_channel', {
 
 // WITHOUT-ROWID: vocadb_song
 export const $vocadb_song = sqliteTable('vocadb_song', {
-	id: integer('id').primaryKey(),
+	id: integer('id').$type<VocaDBSongId>().primaryKey(),
 	track_id: integer('track_id').$type<TrackId>(),
+
+	vocadb_artists: text('vocadb_artists', { mode: 'json' }).$type<ArtistList<VocaDBArtistId>>(),
 })
 
 // WITHOUT-ROWID: vocadb_album
 export const $vocadb_album = sqliteTable('vocadb_album', {
-	id: integer('id').primaryKey(),
+	id: integer('id').$type<VocaDBAlbumId>().primaryKey(),
 	album_id: integer('album_id').$type<AlbumId>(),
+
+	vocadb_artist: text('vocadb_artist', { mode: 'json' }).$type<VocaDBArtistId>(),
+	vocadb_tracks: text('vocadb_tracks', { mode: 'json' }).$type<AlbumTracks<VocaDBSongId>>(),
 })
 
 // WITHOUT-ROWID: vocadb_artist
 export const $vocadb_artist = sqliteTable('vocadb_artist', {
-	id: integer('id').primaryKey(),
+	id: integer('id').$type<VocaDBArtistId>().primaryKey(),
 	artist_id: integer('artist_id').$type<ArtistId>(),
+
+	vocadb_base_voicebank: integer('vocadb_base_voicebank').$type<VocaDBArtistId>(),
 })
 
 // its safe to clear these out, it'll just cause a re-fetch

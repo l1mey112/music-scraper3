@@ -1,11 +1,11 @@
 import { sql } from "drizzle-orm"
-import { db } from "../db"
+import { db, db_ident_pk_with } from "../db"
 import { $youtube_video, $youtube_channel, $i10n } from '../schema'
 import { ProgressRef } from "../server"
 import { db_images_append_url } from "./images"
 import { I10n, Ident, ImageKind, Link, Locale, LocaleNone, LocalePart, YoutubeChannelId } from "../types"
 import { link_insert, links_from_text } from "./links"
-import { assert, db_backoff, db_backoff_sql, run_with_concurrency_limit } from "../util"
+import { assert, db_backoff, db_backoff_or_delete, db_backoff_sql, run_with_concurrency_limit } from "../util"
 import { locale_from_bcp_47, locale_insert } from "../locale"
 import { YoutubeImage, meta_youtube_channel_lemmnos, meta_youtube_channel_v3, meta_youtube_video_v3 } from "./youtube_api"
 
@@ -48,16 +48,14 @@ export async function pass_youtube_video_meta_youtube_video() {
 			// failed, delete
 			// TODO: properly log
 			if (typeof result === 'string') {
-				db.delete($youtube_video)
-					.where(sql`id = ${result}`)
-					.run()
+				db_backoff_or_delete(DIDENT, $youtube_video, $youtube_video.id, result)
 				continue
 			}
 
 			let has_loc_title = false
 			let has_loc_description = false
 
-			const ident = ('yv/' + result.id) as Ident
+			const ident = db_ident_pk_with($youtube_video, result.id)
 			const locales: I10n[] = []
 
 			// localizations are higher quality
@@ -201,13 +199,11 @@ export async function pass_youtube_channel_meta_youtube_channel0() {
 			// failed, delete
 			// TODO: properly log
 			if (typeof result === 'string') {
-				db.delete($youtube_channel)
-					.where(sql`id = ${result}`)
-					.run()
+				db_backoff_or_delete(DIDENT, $youtube_channel, $youtube_channel.id, result)
 				continue
 			}
 
-			const ident = ('yc/' + batch[i].id) as Ident
+			const ident = db_ident_pk_with($youtube_channel, batch[i].id)
 
 			type ChannelKey = keyof typeof result.images
 
@@ -308,13 +304,11 @@ export async function pass_youtube_channel_meta_youtube_channel1() {
 			// failed, delete
 			// TODO: properly log
 			if (typeof result === 'string') {
-				db.delete($youtube_channel)
-					.where(sql`id = ${result}`)
-					.run()
+				db_backoff_or_delete(DIDENT, $youtube_channel, $youtube_channel.id, result)
 				continue
 			}
 
-			const ident = ('yc/' + batch[i].id) as Ident
+			const ident = db_ident_pk_with($youtube_channel, batch[i].id)
 
 			// this is ran after, and will take precedence over the last pass
 

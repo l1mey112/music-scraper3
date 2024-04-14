@@ -4,14 +4,19 @@ import { sql } from "drizzle-orm"
 import { I10n, Locale } from "./types"
 import { $i10n, $kv_store } from "./schema"
 
-// Locale is a IETF language subtag (e.g. en, jp)
+// Locale is a IETF language tag (e.g. en, jp, ja-latn)
+// only storing language and script, nothing else
 
 export function locale_from_bcp_47(code: string): Locale | undefined {
 	const k = parse(code)
 
 	if (!k.language) {
 		return
-	} 
+	}
+
+	if (k.script) {
+		return `${k.language}-${k.script}` as Locale
+	}
 
 	return k.language as Locale
 }
