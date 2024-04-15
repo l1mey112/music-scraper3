@@ -3,7 +3,7 @@ import { db, db_ident_pk_with } from "../db"
 import { locale_insert } from "../locale"
 import { $vocadb_album, $vocadb_artist, $vocadb_song, $youtube_video } from "../schema"
 import { ProgressRef } from "../server"
-import { AlbumTracks, ArtistList, I10n, Ident, Link, Locale, LocaleNone, LocalePart, VocaDBAlbumId, VocaDBArtistId, VocaDBSongId } from "../types"
+import { AlbumTracks, ArtistList, Locale, Ident, Link, LocaleRef, LocaleNone, LocalePart, VocaDBAlbumId, VocaDBArtistId, VocaDBSongId } from "../types"
 import { db_backoff, db_backoff_exactly, db_backoff_forever, db_backoff_or_delete, db_backoff_sql, run_with_concurrency_limit } from "../util"
 import { link_insert } from "./links"
 import { db_images_append_url_without_dimensions } from "./images"
@@ -35,7 +35,7 @@ function append_song_ids(ids: { id: VocaDBSongId }[]) {
 	}
 }
 
-function extract_locales(ident: Ident, entries: VocaDBNameEntry[], out: I10n[]) {
+function extract_locales(ident: Ident, entries: VocaDBNameEntry[], out: Locale[]) {
 	for (const name of entries) {
 		let locale = nameentry_mapping[name.language]
 
@@ -235,7 +235,7 @@ export async function pass_track_meta_vocadb() {
 				albums.push(album.id)
 			}
 
-			const locales: I10n[] = []
+			const locales: Locale[] = []
 			extract_locales(ident, json.names, locales)
 
 			const links: Link[] = []
@@ -366,7 +366,7 @@ export async function pass_album_meta_vocadb() {
 				})
 			}
 
-			const locales: I10n[] = []
+			const locales: Locale[] = []
 
 			if (json.description) {
 				locales.push({
@@ -462,7 +462,7 @@ export async function pass_artist_meta_vocadb() {
 			// append picture/artist art
 			// set base voicebank (if applicable)
 
-			const locales: I10n[] = []
+			const locales: Locale[] = []
 
 			if (json.description) {
 				locales.push({
@@ -516,10 +516,10 @@ export async function pass_artist_meta_vocadb() {
 // i don't know the exact range of languages present on the site
 // im probably missing chinese and a ton of other languages
 const nameentry_mapping = {
-	'Japanese':    'ja'      as Locale,
-	'Romaji':      'ja-latn' as Locale,
-	'English':     'en'      as Locale,
-	'Unspecified': '--'      as Locale,
+	'Japanese':    'ja'      as LocaleRef,
+	'Romaji':      'ja-latn' as LocaleRef,
+	'English':     'en'      as LocaleRef,
+	'Unspecified': '--'      as LocaleRef,
 }
 
 type VocaDBNameEntry = {

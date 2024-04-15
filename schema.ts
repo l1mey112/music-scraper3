@@ -1,5 +1,5 @@
 import { index, sqliteTable, text, integer, blob, real, unique, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { WyHash, ImageKind, Ident, YoutubeChannelId, YoutubeVideoId, FSRef, SpotifyArtistId, SpotifyAlbumId, SpotifyTrackId, TrackId, AudioFingerprintId, LinkKind, KarentAlbumId, KarentArtistId, LocalePart, AlbumId, ArtistId, Locale, LinkId, ArtistList, VocaDBSongId, VocaDBAlbumId, VocaDBArtistId, AlbumTracks } from "./types";
+import { WyHash, ImageKind, Ident, YoutubeChannelId, YoutubeVideoId, FSRef, SpotifyArtistId, SpotifyAlbumId, SpotifyTrackId, TrackId, AudioFingerprintId, LinkKind, KarentAlbumId, KarentArtistId, LocalePart, AlbumId, ArtistId, LocaleRef, LinkId, ArtistList, VocaDBSongId, VocaDBAlbumId, VocaDBArtistId, AlbumTracks } from "./types";
 import { sql } from "drizzle-orm";
 
 // .references(() => youtube_channel.id),
@@ -28,10 +28,10 @@ export const $artist = sqliteTable('artist', {
 // TODO: it would be nice to have a nullable `locale` instead of `--`
 //       null isn't comparable to anything, so it works fine
 
-// WITHOUT-ROWID: i10n
-export const $i10n = sqliteTable('i10n', {
+// WITHOUT-ROWID: locale
+export const $locale = sqliteTable('locale', {
 	ident: text('ident').$type<Ident>().notNull(),
-	locale: text('locale').$type<Locale>().notNull(),
+	locale: text('locale').$type<LocaleRef>().notNull(),
 	part: integer('part').$type<LocalePart>().notNull(),
 	text: text('text').notNull(),
 }, (t) => ({

@@ -1,4 +1,4 @@
-import { $i10n, $links } from "./schema";
+import { $locale, $links } from "./schema";
 
 // misc
 export type MaybePromise<T> = T | Promise<T>
@@ -52,8 +52,8 @@ export type FSRef = NewType<'FSHash', string>
 // see locale.ts
 // Locale is a IETF language subtag (e.g. en, jp)
 // unknown locales are represented as `--`
-export const LocaleNone = '--' as Locale
-export type Locale = NewType<'Locale', '--' | string>
+export const LocaleNone = '--' as LocaleRef
+export type LocaleRef = NewType<'Locale', '--' | string>
 
 const link_kind_tostring = {
 	yt_video_id: 'YouTube Video',
@@ -81,7 +81,7 @@ const link_kind_tostring = {
 }
 
 export type Link = typeof $links.$inferInsert
-export type I10n = typeof $i10n.$inferInsert
+export type Locale = typeof $locale.$inferInsert
 
 export type LinkKind = keyof typeof link_kind_tostring
 export function linkkind_tostring(kind: LinkKind): string {

@@ -8,7 +8,7 @@ import { db, db_ident_pk_with } from "../db"
 import { db_backoff_or_delete, db_backoff_sql, run_with_concurrency_limit } from "../util"
 import { ProgressRef } from "../server"
 import { link_insert, links_from_text } from "./links"
-import { I10n, LocalePart } from "../types"
+import { Locale, LocalePart } from "../types"
 
 async function spotify_raw_artist(spotify_id: string): Promise<SpotifyArtistInitialData | undefined> {	
 	const url = `https://open.spotify.com/artist/${spotify_id}`
@@ -136,7 +136,7 @@ export async function pass_artist_meta_spotify_supplementary() {
 		db.transaction(db => {
 			const links: string[] = [...data.external_links, ...links_from_text(data.biography)]
 
-			const biography: I10n = {
+			const biography: Locale = {
 				ident,
 				locale: locale_current(),
 				part: LocalePart.description,

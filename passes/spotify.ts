@@ -4,7 +4,7 @@ import { db, db_ident_pk_with } from "../db"
 import { $spotify_album, $spotify_artist, $spotify_track } from "../schema"
 import { ProgressRef } from "../server"
 import { db_backoff, db_backoff_forever, db_backoff_or_delete, db_backoff_sql } from "../util"
-import { ArtistList, I10n, Locale, LocaleNone, LocalePart, SpotifyAlbumId, SpotifyArtistId, SpotifyTrackId } from "../types"
+import { ArtistList, Locale, LocaleRef, LocaleNone, LocalePart, SpotifyAlbumId, SpotifyArtistId, SpotifyTrackId } from "../types"
 import { locale_insert } from "../locale"
 import { Album, Artist, Track } from "@spotify/web-api-ts-sdk"
 import { db_images_append_url } from "./images"
@@ -91,9 +91,9 @@ export async function pass_track_meta_spotify() {
 			const album = track.album.id as SpotifyAlbumId
 			const artists = track.artists.map(it => it.id as SpotifyArtistId)
 
-			const name: I10n = {
+			const name: Locale = {
 				ident,
-				locale: 'en' as Locale,
+				locale: 'en' as LocaleRef,
 				part: LocalePart.name,
 				text: track.name,
 			}
@@ -188,9 +188,9 @@ export async function pass_album_meta_spotify() {
 
 			const ident = db_ident_pk_with($spotify_album, album.id)
 
-			const name: I10n = {
+			const name: Locale = {
 				ident,
-				locale: 'en' as Locale,
+				locale: 'en' as LocaleRef,
 				part: LocalePart.name,
 				text: album.name,
 			}
@@ -272,9 +272,9 @@ export async function pass_artist_meta_spotify() {
 
 			const ident = db_ident_pk_with($spotify_artist, artist.id)
 
-			const name: I10n = {
+			const name: Locale = {
 				ident,
-				locale: 'en' as Locale,
+				locale: 'en' as LocaleRef,
 				part: LocalePart.name,
 				text: artist.name,
 			}

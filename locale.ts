@@ -1,13 +1,13 @@
 import { parse } from "bcp-47"
 import { db } from "./db"
 import { sql } from "drizzle-orm"
-import { I10n, Locale } from "./types"
-import { $i10n, $kv_store } from "./schema"
+import { Locale, LocaleRef } from "./types"
+import { $locale, $kv_store } from "./schema"
 
 // Locale is a IETF language tag (e.g. en, jp, ja-latn)
 // only storing language and script, nothing else
 
-export function locale_from_bcp_47(code: string): Locale | undefined {
+export function locale_from_bcp_47(code: string): LocaleRef | undefined {
 	const k = parse(code)
 
 	if (!k.language) {
@@ -15,13 +15,13 @@ export function locale_from_bcp_47(code: string): Locale | undefined {
 	}
 
 	if (k.script) {
-		return `${k.language}-${k.script}` as Locale
+		return `${k.language}-${k.script}` as LocaleRef
 	}
 
-	return k.language as Locale
+	return k.language as LocaleRef
 }
 
-export function locale_insert(locales: I10n | I10n[]) {
+export function locale_insert(locales: Locale | Locale[]) {
 	if (locales instanceof Array && locales.length == 0) {
 		return
 	}
@@ -51,18 +51,18 @@ export function locale_insert(locales: I10n | I10n[]) {
 	// don't bother replacing, just insert
 	// don't overwrite possible user choices
 
-	db.insert($i10n)
+	db.insert($locale)
 		.values(locales as any)
 		.onConflictDoNothing()
 		.run()
 }
 
 // default database locale is "en"
-export function locale_current(): Locale {
+export function locale_current(): LocaleRef {
 	const locale_entry = db.select({ data: $kv_store.data })
 		.from($kv_store)
 		.where(sql`kind = 'locale'`)
-		.get() as { data: Locale } | undefined
+		.get() as { data: LocaleRef } | undefined
 
 	if (!locale_entry) {
 		// insert into db
@@ -70,7 +70,7 @@ export function locale_current(): Locale {
 			.values({ kind: 'locale', data: 'en' })
 			.run()
 
-		return 'en' as Locale
+		return 'en' as LocaleRef
 	}
 
 	return locale_entry.data

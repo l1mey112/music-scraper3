@@ -1,9 +1,9 @@
 import { sql } from "drizzle-orm"
 import { db, db_ident_pk_with } from "../db"
-import { $youtube_video, $youtube_channel, $i10n } from '../schema'
+import { $youtube_video, $youtube_channel, $locale } from '../schema'
 import { ProgressRef } from "../server"
 import { db_images_append_url } from "./images"
-import { I10n, Ident, ImageKind, Link, Locale, LocaleNone, LocalePart, YoutubeChannelId } from "../types"
+import { Locale, Ident, ImageKind, Link, LocaleRef, LocaleNone, LocalePart, YoutubeChannelId } from "../types"
 import { link_insert, links_from_text } from "./links"
 import { assert, db_backoff, db_backoff_or_delete, db_backoff_sql, run_with_concurrency_limit } from "../util"
 import { locale_from_bcp_47, locale_insert } from "../locale"
@@ -56,7 +56,7 @@ export async function pass_youtube_video_meta_youtube_video() {
 			let has_loc_description = false
 
 			const ident = db_ident_pk_with($youtube_video, result.id)
-			const locales: I10n[] = []
+			const locales: Locale[] = []
 
 			// localizations are higher quality
 			for (const [locale_string, local] of Object.entries(result.localizations ?? {})) {
@@ -235,7 +235,7 @@ export async function pass_youtube_channel_meta_youtube_channel0() {
 				// doesn't even work either.
 
 				if (result.about.description) {
-					const description: I10n = {
+					const description: Locale = {
 						ident,
 						locale: LocaleNone,
 						part: LocalePart.description,
@@ -313,7 +313,7 @@ export async function pass_youtube_channel_meta_youtube_channel1() {
 
 			db.transaction(db => {
 				if (result.description) {
-					const description: I10n = {
+					const description: Locale = {
 						ident,
 						locale: LocaleNone,
 						part: LocalePart.description,
@@ -323,7 +323,7 @@ export async function pass_youtube_channel_meta_youtube_channel1() {
 					locale_insert(description)
 				}
 	
-				const display_name: I10n = {
+				const display_name: Locale = {
 					ident,
 					locale: LocaleNone,
 					part: LocalePart.name,
