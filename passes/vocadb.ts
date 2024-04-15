@@ -27,10 +27,12 @@ function append_album_ids(albums: { id: VocaDBAlbumId }[]) {
 }
 
 function append_song_ids(ids: { id: VocaDBSongId }[]) {
-	db.insert($vocadb_song)
-		.values(ids)
-		.onConflictDoNothing()
-		.run()
+	if (ids.length > 0) {
+		db.insert($vocadb_song)
+			.values(ids)
+			.onConflictDoNothing()
+			.run()
+	}
 }
 
 function extract_locales(ident: Ident, entries: VocaDBNameEntry[], out: I10n[]) {
@@ -230,7 +232,7 @@ export async function pass_track_meta_vocadb() {
 					console.log(`vocadb: unknown disc type (song id: ${id}) (proceeding)`, album.discType)
 				}
 
-				albums.push({ id: album.id })
+				albums.push(album.id)
 			}
 
 			const locales: I10n[] = []
@@ -257,12 +259,17 @@ export async function pass_track_meta_vocadb() {
 			db.update($vocadb_song)
 				.set({
 					vocadb_artists: artists,
+					vocadb_albums: albums,
 				})
 				.where(sql`${$vocadb_song.id} = ${id}`)
 				.run()
 
 			append_artist_ids(artists)
-			append_album_ids(albums)
+
+			// TODO: ignoring albums for now...
+			//       you need to add them manually
+
+			// append_album_ids(albums)
 
 			locale_insert(locales)
 			link_insert(links)
@@ -319,6 +326,7 @@ export async function pass_album_meta_vocadb() {
 			// append description (unknown locale)
 			// append links
 			// append picture/album art
+			// append artist
 
 			const release = released_date(json.releaseDate)
 
@@ -382,15 +390,19 @@ export async function pass_album_meta_vocadb() {
 			}
 
 			const artist0 = json.artists[0]
+			const artist0_id = artist0.artist?.id
 			
 			db.update($vocadb_album)
 				.set({
 					vocadb_tracks: tracks,
-					vocadb_artist: artist0.artist!.id,
+					vocadb_artist: artist0_id,
 				})
 				.where(sql`${$vocadb_album.id} = ${id}`)
 				.run()
 
+			if (artist0_id) {
+				append_artist_ids([artist0_id])
+			}
 			append_song_ids(tracks)
 
 			locale_insert(locales)

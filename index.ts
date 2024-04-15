@@ -1,7 +1,6 @@
-import './server' // sideeffect
-import './cred' // sideeffect
-import './pass' // sideeffect
 import { db_close } from './db'
+import { ui_init_cred } from './cred'
+import { ui_init_pass } from './pass'
 
 function exit() {
 	db_close()
@@ -14,3 +13,6 @@ function exit() {
 //       bun doesn't catch these signals
 process.on("SIGINT", exit)
 process.on("SIGTERM", exit)
+
+ui_init_cred()
+ui_init_pass()

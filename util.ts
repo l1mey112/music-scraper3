@@ -1,7 +1,7 @@
 import { SQL, sql } from "drizzle-orm"
 import { db, db_ident_pk, db_ident_pk_with } from "./db"
 import { $retry_backoff } from "./schema"
-import { ProgressRef } from "./server"
+import { ProgressRef, emit_log } from "./server"
 import { DAYS, Ident, PassIdentifier } from "./types"
 import { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core"
 import { WyHash } from "./types"
@@ -107,28 +107,30 @@ export async function run_with_throughput_limit<T>(arr: T[], M: number, N: numbe
 	await Promise.all(active_promises.map(v => v.item))
 }
 
-export function db_backoff_or_delete(pass: PassIdentifier, pk: SQLiteTable, pk_column: SQLiteColumn | string, id: any) {
+export function db_backoff_or_delete(pass: PassIdentifier, pk: SQLiteTable, pk_column: SQLiteColumn, id: any) {
 	// only delete if there is zero existing backoff entries
 	// this means that the data is brand new and we can delete it
 
-	const db_count = db.select({ count: sql<number>`count(*)` })
+	const ident = db_ident_pk_with(pk, id)
+
+	// TODO: deletion of something only for it to be replaced in `all.extrapolate.from_links`
+	//       how annoying...
+
+	/* const db_count = db.select({ count: sql<number>`count(*)` })
 		.from($retry_backoff)
-		.where(sql`pass = ${wyhash(pass)} and ident = ${db_ident_pk_with(pk, id)}`)
+		.where(sql`pass = ${wyhash(pass)} and ident = ${ident}`)
 		.get()
 
 	const count = db_count ? db_count.count : 0
 
 	if (count == 0) {
-		console.log(`deleting early ${db_ident_pk_with(pk, id)}, zero backoffs`)
+		emit_log(`[db_backoff_or_delete] deleting early ${ident}, zero backoffs`)
 		db.delete(pk)
 			.where(sql`${pk_column} = ${id}`)
 			.run()
 		return
-	}
+	} */
 
-	// else
-
-	const ident = db_ident_pk_with(pk, id)
 	db_backoff_forever(pass, ident)
 }
 
@@ -177,8 +179,11 @@ export function db_backoff(pass: PassIdentifier, id: Ident) {
 }
 
 export function db_backoff_sql(pass: PassIdentifier, pk: SQLiteTable, pk_column: SQLiteColumn | string): SQL<boolean> {
-	const ident = db_ident_pk(pk)
-	return sql`(not exists (select 1 from ${$retry_backoff} where ident = (${ident} || ${pk_column}) and pass = ${wyhash(pass)} and (expire is null or expire > ${Date.now()})))`
+	return sql`(
+		not exists (
+			select 1 from ${$retry_backoff} where ${$retry_backoff.ident} = (${db_ident_pk(pk)} || ${pk_column}) and
+			pass = ${wyhash(pass)} and (expire is null or expire > ${Date.now()}))
+	)`
 }
 
 export const WYHASH_SEED = 761864364875522238n

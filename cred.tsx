@@ -2,17 +2,20 @@ import { $kv_store } from './schema'
 import { db } from "./db"
 import { component_invalidate, component_register, emit_log, route_register } from "./server"
 import { sql } from 'drizzle-orm'
+import { pass_force_stop } from './pass'
 
 export type CredentialKind = keyof CredentialStore
 type CredentialStore = {
 	'spotify': [string, string][] // [client_id, client_secret]
 	'deezer_arl': [string][]
+	'spotify_dl_user': [string, string][] // [username, password]
 }
 
 function cred_db_get(): CredentialStore {
 	let store: CredentialStore = {
 		'spotify': [],
 		'deezer_arl': [],
+		'spotify_dl_user': [],
 	}
 
 	const cred = db.select({ data: $kv_store.data })
@@ -26,6 +29,17 @@ function cred_db_get(): CredentialStore {
 	}
 
 	return store
+}
+
+export function cred_get<T extends CredentialKind>(kind: T): CredentialStore[T] {
+	const datum = cred_db_get()[kind]
+
+	if (datum.length === 0) {
+		emit_log(`[cred_get] ${kind} not found`, 'error')
+		pass_force_stop()
+	}
+	
+	return datum
 }
 
 function cred_db_set(store: CredentialStore) {
@@ -42,7 +56,7 @@ async function cred_add(req: Request) {
 	const data = await req.formData()
 
 	exit: try {
-		const kind = data.get('kind')
+		const kind = data.get('kind') as CredentialKind
 		const values = Array.from(data.keys())
 			.filter(k => k.startsWith('v'))
 			.map(k => data.get(k))
@@ -78,6 +92,14 @@ async function cred_add(req: Request) {
 				}
 
 				store.deezer_arl.push(values as [string])
+				break
+			}
+			case 'spotify_dl_user': {
+				if (values.length !== 2) {
+					throw null
+				}
+
+				store.spotify_dl_user.push(values as [string, string])
 				break
 			}
 			default: {
@@ -181,13 +203,15 @@ const props: TableProps[] = [
 		title: 'Deezer ARL Token',
 		names: ['ARL Token'],
 	},
+	{
+		kind: 'spotify_dl_user',
+		title: 'Spotify Download User',
+		names: ['Username/Email', 'Password'],
+		tooltip: 'use a throwaway account, preferably non premium',
+	},
 ]
 
 const cred_map = new Map(props.map(prop => [prop.kind, (init: boolean) => cred_table(init, cred_db_get()[prop.kind], prop)]))
-
-for (const [_, fn] of cred_map) {
-	component_register(fn, 'left')
-}
 
 function invalidate_kind(kind: CredentialKind) {
 	const fn = cred_map.get(kind)
@@ -198,11 +222,11 @@ function invalidate_kind(kind: CredentialKind) {
 	component_invalidate(fn)
 }
 
-route_register('POST', 'cred_delete', cred_delete)
-route_register('POST', 'cred_add', cred_add)
+export function ui_init_cred() {
+	for (const [_, fn] of cred_map) {
+		component_register(fn, 'left')
+	}
 
-/* type Credential =
-	| 'spotify'
-	| 'spotify_user'
-	| 'qobuz_user'
-	| 'deezer_user' */
+	route_register('POST', 'cred_delete', cred_delete)
+	route_register('POST', 'cred_add', cred_add)
+}

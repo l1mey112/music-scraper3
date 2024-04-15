@@ -5,7 +5,7 @@ import { ProgressRef } from "../server"
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
 import { Ident, Link, LinkId, LinkKind } from "../types"
 import { run_with_concurrency_limit, wyhash } from "../util"
-import { $karent_album, $karent_artist, $links, $spotify_album, $spotify_artist, $spotify_track, $vocadb_album, $vocadb_artist, $vocadb_song, $youtube_channel } from "../schema"
+import { $karent_album, $karent_artist, $links, $spotify_album, $spotify_artist, $spotify_track, $vocadb_album, $vocadb_artist, $vocadb_song, $youtube_channel, $youtube_video } from "../schema"
 import { meta_youtube_handle_to_id } from "./youtube_api"
 
 export function link_delete(id: LinkId) {
@@ -269,25 +269,15 @@ export function pass_all_extrapolate_from_links() {
 	// extrapolating from youtube video descriptions is a good way to blow up the DB
 	// better places would be youtube channel links, vocadb, karent, distributor links etc.
 
+	// TODO: honor the above message
 	// TODO: would be easier to construct an array of invalid tables (inverted) instead
-
-	const valid_tables = [
-		$karent_artist, $karent_album,
-		$spotify_artist, $spotify_album, $spotify_track,
-		$youtube_channel,
-		$vocadb_song,
-		$vocadb_album,
-		$vocadb_artist,
-	]
-
-	const prepends = valid_tables.map(it => `${db_ident_pk(it)}*`)
 
 	db.transaction(db => {
 		function link_test(table_to: SQLiteTable, link_kind: LinkKind) {
 			const links = db.select()
 				.from($links)
-				.where(sql`${$links.kind} = ${link_kind} and (${sql.join(prepends.map(it => sql`${$links.ident} glob ${it}`), sql`or`)})
-					and ${$links.ident} and not exists (select 1 from ${table_to} where id = ${$links.data})`)
+				.where(sql`${$links.kind} = ${link_kind}
+					and not exists (select 1 from ${table_to} where id = ${$links.data})`)
 				.all()
 
 			for (const link of links) {
@@ -305,6 +295,8 @@ export function pass_all_extrapolate_from_links() {
 		link_test($spotify_track, 'sp_track_id')
 		link_test($karent_album, 'ka_album_id')
 		link_test($karent_artist, 'ka_artist_id')
+		link_test($youtube_video, 'yt_video_id')
+		link_test($youtube_channel, 'yt_channel_id')
 	})
 
 	return updated

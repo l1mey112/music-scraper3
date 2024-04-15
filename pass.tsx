@@ -3,6 +3,16 @@ import { component_invalidate, component_register, emit_log, route_register } fr
 import { MaybePromise, PassIdentifier } from "./types"
 import { passes } from "./passes"
 
+class StopPass extends Error {
+	constructor() {
+		super('StopPass')
+	}
+}
+
+export function pass_force_stop(): never {
+	throw new StopPass()
+}
+
 const TRIP_COUNT_MAX = 20
 
 type PassState = {
@@ -34,8 +44,8 @@ function walk_passes(blocks: PassElement[], parent?: PassGroupState): PassGroupS
 	}
 
 	for (const block of blocks) {
-		if ('blocks' in block) {
-			state.blocks.push(walk_passes(block.blocks, state))
+		if (block instanceof Array) {
+			state.blocks.push(walk_passes(block, state))
 		} else {
 			state.blocks.push(block)
 		}
@@ -50,8 +60,7 @@ type PassBlock = {
 	cred?: CredentialKind[] // capabilities
 }
 
-type PassGroup = { blocks: PassElement[] }
-export type PassElement = PassGroup | PassBlock
+export type PassElement = PassElement[] | PassBlock
 
 enum PassStateEnum {
 	Running,
@@ -175,9 +184,21 @@ async function state_machine() {
 		case PassStateEnum.Running: {
 			const pass = pass_state.current_pass.blocks[pass_state.current_pass.idx] as PassBlock
 
-			if (await pass.fn()) {
-				pass_state.current_pass.mutations.add(pass_state.current_pass.idx)
+			try {
+				await Bun.sleep(50) // much cooler than instananous execution
+				if (await pass.fn()) {
+					pass_state.current_pass.mutations.add(pass_state.current_pass.idx)
+				}
+			} catch (e) {
+				pass_state.state = PassStateEnum.Stopped
+				if (e instanceof StopPass) {
+					break
+				}
+				emit_log(`[pass_job] ${e}`, 'error')
+				emit_log(`[pass_job] pass <i>${pass.name}</i> failed`, 'error')
+				throw e
 			}
+
 			pass_state.current_pass.idx++
 
 			// typescript narrowing has no idea about other functions and their side effects
@@ -346,8 +367,10 @@ async function pass_toggle_bp(req: Request) {
 	}
 }
 
-route_register('POST', 'pass_run', pass_run)
-route_register('POST', 'pass_stop', pass_stop)
-route_register('POST', 'pass_toggle_st', pass_toggle_st)
-route_register('POST', 'pass_toggle_bp', pass_toggle_bp)
-component_register(pass_tostring, 'left')
+export function ui_init_pass() {
+	route_register('POST', 'pass_run', pass_run)
+	route_register('POST', 'pass_stop', pass_stop)
+	route_register('POST', 'pass_toggle_st', pass_toggle_st)
+	route_register('POST', 'pass_toggle_bp', pass_toggle_bp)
+	component_register(pass_tostring, 'left')
+}

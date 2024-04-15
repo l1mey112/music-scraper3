@@ -48,6 +48,10 @@ export async function meta_youtube_video_v3(video_ids: string[]): Promise<(Youtu
 	}
 	const json = await resp.json() as any
 
+	if (!json.items) {
+		json.items = []
+	}
+
 	// returned ids are in order
 	// https://developers.google.com/youtube/v3/docs/videos#resource
 
@@ -106,6 +110,10 @@ export async function meta_youtube_channel_lemmnos(channel_ids: string[]): Promi
 
 	const result: (YoutubeChannelLemmnos | string)[] = []
 
+	if (!json.items) {
+		json.items = []
+	}
+
 	const map = new Map<string, any>()
 	for (const inner of json.items) {
 		map.set(inner.id, inner)
@@ -151,6 +159,10 @@ export async function meta_youtube_channel_v3(channel_ids: string[]): Promise<(s
 	const json = await resp.json() as any
 
 	const result: (YoutubeChannelV3 | string)[] = []
+
+	if (!json.items) {
+		json.items = []
+	}
 
 	const map = new Map<string, any>()
 	for (const inner of json.items) {

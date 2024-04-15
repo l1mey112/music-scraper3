@@ -70,18 +70,29 @@ export const $karent_album = sqliteTable('karent_album', {
 export const $spotify_artist = sqliteTable('spotify_artist', {
 	id: text('id').$type<SpotifyArtistId>().primaryKey(),
 	artist_id: integer('artist_id').$type<ArtistId>(),
+
+	spotify_genres: text('spotify_genres', { mode: 'json' }).$type<string[]>(),
 })
 
 // WITHOUT-ROWID: spotify_album
 export const $spotify_album = sqliteTable('spotify_album', {
 	id: text('id').$type<SpotifyAlbumId>().primaryKey(),
 	album_id: integer('album_id').$type<AlbumId>(),
+
+	spotify_disc_count: integer('spotify_disc_count'),
+	spotify_track_count: integer('spotify_track_count'),
 })
 
 // WITHOUT-ROWID: spotify_track
 export const $spotify_track = sqliteTable('spotify_track', {
 	id: text('id').$type<SpotifyTrackId>().primaryKey(),
 	track_id: integer('track_id').$type<TrackId>(),
+
+	spotify_preview_url: text('spotify_preview_url'),
+	spotify_disc_number: integer('spotify_disc_number'),
+	spotify_track_number: integer('spotify_track_number'),
+	spotify_album_id: text('spotify_album_id').$type<SpotifyAlbumId>(),
+	spotify_isrc: text('spotify_isrc'),
 })
 
 // WITHOUT-ROWID: youtube_video
@@ -106,6 +117,7 @@ export const $vocadb_song = sqliteTable('vocadb_song', {
 	track_id: integer('track_id').$type<TrackId>(),
 
 	vocadb_artists: text('vocadb_artists', { mode: 'json' }).$type<ArtistList<VocaDBArtistId>>(),
+	vocadb_albums: text('vocadb_albums', { mode: 'json' }).$type<VocaDBAlbumId[]>(),
 })
 
 // WITHOUT-ROWID: vocadb_album
@@ -173,7 +185,7 @@ export const $sources = sqliteTable('sources', {
 	track_id: integer('track_id').$type<TrackId>(),
 	width: integer('width'),
 	height: integer('height'),
-	bitrate: integer('bitrate').notNull(), // in Hz, not kHz
+	bitrate: integer('bitrate').notNull(), // in Hz, not kHz (bitrate, not sample rate)
 	fingerprint: integer('fingerprint').$type<AudioFingerprintId>(),
 }, (t) => ({
 	//pidx0: index("sources.idx0").on(t.ident, t.fingerprint),
