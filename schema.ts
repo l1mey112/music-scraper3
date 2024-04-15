@@ -72,6 +72,10 @@ export const $spotify_artist = sqliteTable('spotify_artist', {
 	artist_id: integer('artist_id').$type<ArtistId>(),
 
 	spotify_genres: text('spotify_genres', { mode: 'json' }).$type<string[]>(),
+	spotify_followers: integer('spotify_followers'),
+	spotify_monthly_listeners: integer('spotify_monthly_listeners'),
+	spotify_avatar_extracted_colour_dark: text('spotify_avatar_extracted_colour_dark'), // #hex (prepended #)
+	spotify_avatar_extracted_colour_raw: text('spotify_avatar_extracted_colour_raw'), // #hex (prepended #)
 })
 
 // WITHOUT-ROWID: spotify_album
@@ -79,7 +83,6 @@ export const $spotify_album = sqliteTable('spotify_album', {
 	id: text('id').$type<SpotifyAlbumId>().primaryKey(),
 	album_id: integer('album_id').$type<AlbumId>(),
 
-	spotify_disc_count: integer('spotify_disc_count'),
 	spotify_track_count: integer('spotify_track_count'),
 })
 

@@ -136,7 +136,7 @@ export async function pass_album_meta_spotify() {
 	let updated = false
 	const k = db.select({ id: $spotify_album.id })
 		.from($spotify_album)
-		.where(sql`(spotify_disc_count is null or spotify_track_count is null)
+		.where(sql`(spotify_track_count is null)
 			and ${db_backoff_sql(DIDENT, $spotify_album, $spotify_album.id)}`)
 		.all()
 
@@ -207,7 +207,6 @@ export async function pass_album_meta_spotify() {
 
 				db.update($spotify_album)
 					.set({
-						spotify_disc_count: album.total_tracks,
 						spotify_track_count: album.total_tracks,
 					})
 					.where(sql`id = ${album.id}`)

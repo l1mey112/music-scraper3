@@ -10,6 +10,7 @@ import { pass_karent_album_meta_karent_album } from "./passes/karent"
 import { pass_album_meta_vocadb, pass_artist_meta_vocadb, pass_track_meta_vocadb, pass_track_meta_vocadb_from_youtube } from "./passes/vocadb"
 import { pass_album_meta_spotify, pass_artist_meta_spotify, pass_track_meta_spotify } from "./passes/spotify"
 import { pass_sources_download_from_youtube_video_zotify } from "./passes/spotify_download"
+import { pass_artist_meta_spotify_supplementary } from "./passes/spotify_raw"
 
 export const passes: PassElement[] = [
 	[
@@ -29,6 +30,7 @@ export const passes: PassElement[] = [
 		{ name: 'youtube_channel.meta.youtube_channel1', fn: pass_youtube_channel_meta_youtube_channel1 },
 		{ name: 'artist.meta.vocadb', fn: pass_artist_meta_vocadb },
 		{ name: 'artist.meta.spotify', fn: pass_artist_meta_spotify },
+		{ name: 'artist.meta.spotify_artist_supplementary', fn: pass_artist_meta_spotify_supplementary },
 		[
 			{ name: 'links.classify.link_shorteners', fn: pass_links_classify_link_shorteners },
 			{ name: 'links.classify.weak', fn: pass_links_classify_weak },

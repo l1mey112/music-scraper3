@@ -36,8 +36,13 @@ export async function pass_sources_download_from_youtube_video_zotify() {
 
 		try {
 			// 160kbps (highest for free users)
-			await $`zotify --download-quality high --print-progress-info False --download-lyrics False --download-format ogg --root-path ${folder} --username ${username} --password ${password} --output ${file + '.ogg'} ${'https://open.spotify.com/track/' + id}`
-		} catch {
+			const sh = await $`zotify --download-quality high --print-download-progress False --print-progress-info False --download-lyrics False --download-format ogg --root-path ${folder} --username ${username} --password ${password} --output ${file + '.ogg'} ${'https://open.spotify.com/track/' + id}`
+			if (sh.stderr.length > 0) {
+				throw new Error(new TextDecoder().decode(sh.stderr))
+			}
+		} catch (e) {
+			console.error('failed to download track', id)
+			console.error(e)
 			db_backoff_forever(DIDENT, ident)
 			return
 		}
