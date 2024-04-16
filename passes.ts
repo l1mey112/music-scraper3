@@ -6,7 +6,7 @@ import { pass_images_download_url_to_hash } from "./passes/images"
 import { pass_sources_download_from_youtube_video_ytdlp } from "./passes/youtube_download"
 import { pass_sources_classify_audio_fingerprint } from "./passes/chromaprint"
 import { pass_links_extrapolate_from_linkcore, pass_links_extrapolate_from_lnk_to } from "./passes/links_distributors"
-import { pass_karent_album_meta_karent_album } from "./passes/karent"
+import { pass_karent_album_meta_karent_album, pass_karent_artist_meta_karent_artist } from "./passes/karent"
 import { pass_album_meta_vocadb, pass_artist_meta_vocadb, pass_track_meta_vocadb, pass_track_meta_vocadb_from_youtube } from "./passes/vocadb"
 import { pass_album_meta_spotify, pass_artist_meta_spotify, pass_track_meta_spotify } from "./passes/spotify"
 import { pass_sources_download_from_youtube_video_zotify } from "./passes/spotify_download"
@@ -29,6 +29,7 @@ export const passes: PassElement[] = [
 		{ name: 'youtube_channel.extrapolate.from_channel_id', fn: pass_youtube_channel_extrapolate_from_channel_id },
 		{ name: 'youtube_channel.meta.youtube_channel0', fn: pass_youtube_channel_meta_youtube_channel0 },
 		{ name: 'youtube_channel.meta.youtube_channel1', fn: pass_youtube_channel_meta_youtube_channel1 },
+		{ name: 'karent_artist.meta.karent_artist', fn: pass_karent_artist_meta_karent_artist },
 		{ name: 'artist.meta.vocadb', fn: pass_artist_meta_vocadb },
 		{ name: 'artist.meta.spotify', fn: pass_artist_meta_spotify },
 		{ name: 'artist.meta.spotify_artist_supplementary', fn: pass_artist_meta_spotify_supplementary },

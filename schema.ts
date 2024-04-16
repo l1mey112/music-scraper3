@@ -64,6 +64,8 @@ export const $karent_artist = sqliteTable('karent_artist', {
 export const $karent_album = sqliteTable('karent_album', {
 	id: text('id').$type<KarentAlbumId>().primaryKey(),
 	album_id: integer('album_id').$type<AlbumId>(),
+
+	karent_artist_id: text('karent_artist_id').$type<KarentArtistId>(),
 })
 
 // WITHOUT-ROWID: spotify_artist

@@ -49,20 +49,3 @@ export function db_fs_sharded_path_noext_nonlazy(): [string, string] {
 
 	return [`${media_db}/${shard}/${hash}`, hash]
 }
-
-export function db_links_append(pk: SQLiteTable, pk_id: string | number, urls: string[]) {
-	if (urls.length === 0) {
-		return
-	}
-
-	const links: Link[] = urls.map((url) => ({
-		ident: ident_pk(pk, pk_id),
-		kind: 'unknown',
-		data: url,
-	}))
-
-	db.insert($links)
-		.values(links)
-		.onConflictDoNothing()
-		.run()
-}

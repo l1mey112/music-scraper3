@@ -1,17 +1,16 @@
 import { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core"
-import { $artist, $links, $locale, $spotify_artist, $vocadb_artist, $youtube_channel } from "../schema"
-import { Ident, LinkKind } from "../types"
+import { $artist, $karent_artist, $links, $locale, $spotify_artist, $vocadb_artist, $youtube_channel } from "../schema"
+import { ArtistId, Ident, LinkKind } from "../types"
 import { db, ident_pk, ident_pk_reverse } from "../db"
 import { SQL, sql } from "drizzle-orm"
 
 // artist.classify.auto
 export function pass_artist_classify_auto() {
-	// $karent_artist, // TODO: karent album -> karent artist support
-
 	const valid_table_rows = [
 		[$spotify_artist, 'sp_artist_id'],
 		[$youtube_channel, 'yt_channel_id'],
 		[$vocadb_artist, 'vd_artist_id'],
+		[$karent_artist, 'ka_artist_id'],
 	] as const
 
 	const valid_tables = new Map<SQLiteTable, LinkKind>(valid_table_rows)
@@ -57,6 +56,7 @@ export function pass_artist_classify_auto() {
 		// TODO: twitter links etc
 		const shared_links = new Map<LinkKind, Set<string>>([
 			['tw_user', new Set()],
+			['pi_creator', new Set()],
 		])
 
 		// start> spotify id -> karent
@@ -145,16 +145,49 @@ export function pass_artist_classify_auto() {
 }
 
 function unify(together: Iterable<Ident>) {
-	const new_artist = db.insert($artist)
-		.values({})
-		.returning()
-		.get()
+	let artist_id: ArtistId | undefined
+
+	const need_to_be_updated: Ident[] = []
 
 	for (const ident of together) {
 		const [data, table] = ident_pk_reverse(ident)
-		
+
+		const k = db.select({ artist_id: sql<ArtistId>`artist_id` })
+			.from(table)
+			.where(sql`id = ${data} and artist_id is not null`)
+			.get()
+
+		if (k) {
+			if (!artist_id) {
+				artist_id = k.artist_id
+			} else if (artist_id !== k.artist_id) {
+				throw new Error(`multiple artists found, ${artist_id} and ${k.artist_id}`)
+			}
+		} else {
+			need_to_be_updated.push(ident)
+		}
+	}
+
+	if (!artist_id) {
+		const new_artist = db.insert($artist)
+			.values({})
+			.returning()
+			.get()
+
+		artist_id = new_artist.id
+
+		console.log(`new artist ${artist_id}`)
+	} else {
+		console.log(`found artist ${artist_id}`)
+	}
+
+	for (const ident of need_to_be_updated) {
+		const [data, table] = ident_pk_reverse(ident)
+
+		console.log(`updating ${ident} to ${artist_id}`)
+
 		db.update(table)
-			.set({ artist_id: new_artist.id })
+			.set({ artist_id: artist_id })
 			.where(sql`id = ${data}`)
 			.run()
 	}
