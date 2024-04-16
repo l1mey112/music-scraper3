@@ -5,10 +5,8 @@ import { BunFile } from "bun";
 import { nanoid } from "./nanoid";
 import { resolve } from "path";
 import { existsSync, mkdirSync, statSync } from "fs";
-import { $retry_backoff, $links } from './schema'
-import { db, db_ident_pk, db_ident_pk_with } from './db';
-import { SQL, sql } from 'drizzle-orm';
-import { emit_log } from './server';
+import { $links } from './schema'
+import { db, ident_pk } from './db';
 
 const media_db = resolve("db")
 
@@ -58,7 +56,7 @@ export function db_links_append(pk: SQLiteTable, pk_id: string | number, urls: s
 	}
 
 	const links: Link[] = urls.map((url) => ({
-		ident: db_ident_pk_with(pk, pk_id),
+		ident: ident_pk(pk, pk_id),
 		kind: 'unknown',
 		data: url,
 	}))

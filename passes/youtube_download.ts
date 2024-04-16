@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm"
-import { db, db_ident_pk_with } from "../db"
+import { db, ident_pk } from "../db"
 import { $youtube_video, $sources } from '../schema'
 import { db_backoff_forever, db_backoff_sql, run_with_concurrency_limit } from "../util"
 import { ProgressRef } from "../server"
@@ -29,7 +29,7 @@ export async function pass_sources_download_from_youtube_video_ytdlp() {
 
 	// this shouldn't fail, its assumed that the youtube_video table doesn't contain invalid ids
 	await run_with_concurrency_limit(k, 20, pc, async ({ id }) => {
-		const ident = db_ident_pk_with($youtube_video, id)
+		const ident = ident_pk($youtube_video, id)
 		const [path, hash_part] = db_fs_sharded_path_noext_nonlazy()
 
 		type Output = {

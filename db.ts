@@ -16,7 +16,7 @@ sqlite.exec("pragma mmap_size = 30000000000;")
 //sqlite.exec("pragma auto_vacuum = incremental;") // TODO: needs to be set at db creation before tables, so why call it here?
 sqlite.loadExtension("./chromaprint") // chromaprint.c
 
-export const db: BunSQLiteDatabase<typeof schema> = drizzle(sqlite, { schema })
+export const db: BunSQLiteDatabase<typeof schema> = drizzle(sqlite, { schema, logger: false })
 
 export function db_close() {
 	sqlite.exec("pragma wal_checkpoint(TRUNCATE);") // checkpoint WAL
@@ -31,28 +31,47 @@ export function db_close() {
 
 const WYHASH_SEED = 761864364875522238n
 
-// ensure lengths are 3
-export function db_ident_pk(table: SQLiteTable) {
-	switch (table) {
-		case $youtube_video:   return 'yv/'
-		case $youtube_channel: return 'yc/'
-		case $images:          return 'im/'
-		case $sources:         return 'so/'
-		case $karent_album:    return 'ka/'
-		case $karent_artist:   return 'kr/'
-		case $spotify_track:   return 'st/'
-		case $spotify_album:   return 'sa/'
-		case $spotify_artist:  return 'sr/'
-		case $links:		   return 'lk/'
-		case $vocadb_song:     return 'vs/'
-		case $vocadb_album:    return 'va/'
-		case $vocadb_artist:   return 'vr/'
-		default: {
-			throw new Error(`unknown table ${table}`)
-		}
-	}
+type IdentPart = keyof typeof ident_match
+
+const ident_match = {
+	'yv/': $youtube_video,
+	'yc/': $youtube_channel,
+	'im/': $images,
+	'so/': $sources,
+	'ka/': $karent_album,
+	'kr/': $karent_artist,
+	'st/': $spotify_track,
+	'sa/': $spotify_album,
+	'sr/': $spotify_artist,
+	'lk/': $links,
+	'vs/': $vocadb_song,
+	'va/': $vocadb_album,
+	'vr/': $vocadb_artist,
 }
 
-export function db_ident_pk_with(table: SQLiteTable, id: string | number): Ident {
-	return (db_ident_pk(table) + id) as Ident
+// reverse map, mapping values to keys
+// need to use map, objects cant be used as object keys
+const reverse_map = new Map<SQLiteTable, IdentPart>(Object.entries(ident_match).map(([k, v]) => [v, k] as [SQLiteTable, IdentPart]))
+
+export function ident_pk(table: SQLiteTable, id: string | number): Ident
+export function ident_pk(table: SQLiteTable): IdentPart
+
+export function ident_pk(table: SQLiteTable, id?: string | number) {
+	const ident = reverse_map.get(table)
+	if (ident === undefined) {
+		throw new Error(`unknown table ${table} (${table._.name})`)
+	}
+	if (id) {
+		return (ident + id) as Ident
+	}
+	return ident
+}
+
+export function ident_pk_reverse(ident: Ident): [string, SQLiteTable] {
+	const part = ident.slice(0, 3) as IdentPart
+	const table = ident_match[part]
+	if (!table) {
+		throw new Error(`unknown ident part ${part} (${ident})`)
+	}
+	return [ident.slice(3), table]
 }

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm"
-import { db, db_ident_pk, db_ident_pk_with } from "../db"
+import { db, ident_pk } from "../db"
 import { db_links_append } from "../db_misc"
 import { ProgressRef } from "../server"
 import { db_backoff_forever, db_backoff_or_delete, db_backoff_sql, run_with_concurrency_limit } from "../util"
@@ -59,7 +59,7 @@ export async function pass_karent_album_meta_karent_album() {
 			return
 		}
 
-		const ident = db_ident_pk_with($karent_album, id)
+		const ident = ident_pk($karent_album, id)
 
 		// TODO: i don't like this...
 		const text = await resp.text()

@@ -1,5 +1,5 @@
 import { SQL, sql } from "drizzle-orm"
-import { db, db_ident_pk, db_ident_pk_with } from "./db"
+import { db, ident_pk } from "./db"
 import { $retry_backoff } from "./schema"
 import { ProgressRef, emit_log } from "./server"
 import { DAYS, Ident, PassIdentifier } from "./types"
@@ -111,7 +111,7 @@ export function db_backoff_or_delete(pass: PassIdentifier, pk: SQLiteTable, pk_c
 	// only delete if there is zero existing backoff entries
 	// this means that the data is brand new and we can delete it
 
-	const ident = db_ident_pk_with(pk, id)
+	const ident = ident_pk(pk, id)
 
 	// TODO: deletion of something only for it to be replaced in `all.extrapolate.from_links`
 	//       how annoying...
@@ -170,9 +170,13 @@ export function db_backoff(pass: PassIdentifier, id: Ident) {
 		})
 		.onConflictDoUpdate({
 			target: [$retry_backoff.ident, $retry_backoff.pass],
-			set: {
+			/* set: {
 				issued: Date.now(),
 				expire: sql`((expire - issued) * 2) + ${Date.now()}`,
+			} */
+			set: {
+				issued: Date.now(),
+				expire: Date.now() + DAYS * 1,
 			}
 		})
 		.run()
@@ -181,7 +185,7 @@ export function db_backoff(pass: PassIdentifier, id: Ident) {
 export function db_backoff_sql(pass: PassIdentifier, pk: SQLiteTable, pk_column: SQLiteColumn | string): SQL<boolean> {
 	return sql`(
 		not exists (
-			select 1 from ${$retry_backoff} where ${$retry_backoff.ident} = (${db_ident_pk(pk)} || ${pk_column}) and
+			select 1 from ${$retry_backoff} where ${$retry_backoff.ident} = (${ident_pk(pk)} || ${pk_column}) and
 			pass = ${wyhash(pass)} and (expire is null or expire > ${Date.now()}))
 	)`
 }

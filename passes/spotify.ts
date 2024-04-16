@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm"
 import { spotify_api } from "../cred_api"
-import { db, db_ident_pk_with } from "../db"
+import { db, ident_pk } from "../db"
 import { $spotify_album, $spotify_artist, $spotify_track } from "../schema"
 import { ProgressRef } from "../server"
 import { db_backoff, db_backoff_forever, db_backoff_or_delete, db_backoff_sql } from "../util"
@@ -8,6 +8,7 @@ import { ArtistList, Locale, LocaleRef, LocaleNone, LocalePart, SpotifyAlbumId, 
 import { locale_insert } from "../locale"
 import { Album, Artist, Track } from "@spotify/web-api-ts-sdk"
 import { db_images_append_url } from "./images"
+import { link_insert } from "./links"
 
 function append_artist_ids(artists: ArtistList<SpotifyArtistId>) {
 	if (artists.length > 0) {
@@ -86,7 +87,7 @@ export async function pass_track_meta_spotify() {
 				continue
 			}
 
-			const ident = db_ident_pk_with($spotify_track, track.id)
+			const ident = ident_pk($spotify_track, track.id)
 
 			const album = track.album.id as SpotifyAlbumId
 			const artists = track.artists.map(it => it.id as SpotifyArtistId)
@@ -186,7 +187,7 @@ export async function pass_album_meta_spotify() {
 				}
 			}
 
-			const ident = db_ident_pk_with($spotify_album, album.id)
+			const ident = ident_pk($spotify_album, album.id)
 
 			const name: Locale = {
 				ident,
@@ -260,17 +261,35 @@ export async function pass_artist_meta_spotify() {
 			}
 		}
 
+		// a spotify artist id can map to another one which is very annoying...
+		// taking the `artist.id` and performing backoff will cause no backoff
+
 		// append name
 		// append picture/artist art
 		// set data
 
-		for (const artist of artists) {
+		for (const [i, artist] of artists.entries()) {
 			if (typeof artist === 'string') {
 				db_backoff_or_delete(DIDENT, $spotify_artist, $spotify_artist.id, artist)
 				continue
 			}
 
-			const ident = db_ident_pk_with($spotify_artist, artist.id)
+			const real_id = ids[i]
+			const ident = ident_pk($spotify_artist, real_id)
+
+			// create new artist entry and link to eachother
+			if (real_id !== artist.id) {
+				db.insert($spotify_artist)
+					.values({ id: artist.id as SpotifyArtistId })
+					.onConflictDoNothing()
+					.run()
+
+				link_insert({
+					ident,
+					kind: 'sp_artist_id',
+					data: artist.id,
+				})
+			}
 
 			const name: Locale = {
 				ident,
@@ -292,7 +311,7 @@ export async function pass_artist_meta_spotify() {
 					.set({
 						spotify_genres: artist.genres,
 					})
-					.where(sql`id = ${artist.id}`)
+					.where(sql`id = ${real_id}`)
 					.run()
 
 				db_backoff(DIDENT, ident)

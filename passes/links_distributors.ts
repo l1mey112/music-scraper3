@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm"
-import { db, db_ident_pk_with } from "../db"
+import { db, ident_pk } from "../db"
 import { ProgressRef } from "../server"
 import { link_delete, link_insert } from "./links"
 import { db_backoff_forever, db_backoff_or_delete as db_backoff_forever_or_delete, db_backoff_sql, run_with_concurrency_limit } from "../util"
@@ -38,7 +38,7 @@ export async function pass_links_extrapolate_from_linkcore() {
 	const pc = new ProgressRef(DIDENT)
 
 	await run_with_concurrency_limit(k, 5, pc, async (link) => {
-		const ident = db_ident_pk_with($links, link.id)
+		const ident = ident_pk($links, link.id)
 
 		const derived_urls: string[] = []
 

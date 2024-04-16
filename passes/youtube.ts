@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm"
-import { db, db_ident_pk_with } from "../db"
+import { db, ident_pk } from "../db"
 import { $youtube_video, $youtube_channel, $locale } from '../schema'
 import { ProgressRef } from "../server"
 import { db_images_append_url } from "./images"
@@ -55,7 +55,7 @@ export async function pass_youtube_video_meta_youtube_video() {
 			let has_loc_title = false
 			let has_loc_description = false
 
-			const ident = db_ident_pk_with($youtube_video, result.id)
+			const ident = ident_pk($youtube_video, result.id)
 			const locales: Locale[] = []
 
 			// localizations are higher quality
@@ -203,7 +203,7 @@ export async function pass_youtube_channel_meta_youtube_channel0() {
 				continue
 			}
 
-			const ident = db_ident_pk_with($youtube_channel, batch[i].id)
+			const ident = ident_pk($youtube_channel, batch[i].id)
 
 			type ChannelKey = keyof typeof result.images
 
@@ -303,7 +303,7 @@ export async function pass_youtube_channel_meta_youtube_channel1() {
 				continue
 			}
 
-			const ident = db_ident_pk_with($youtube_channel, batch[i].id)
+			const ident = ident_pk($youtube_channel, batch[i].id)
 
 			// this is ran after, and will take precedence over the last pass
 

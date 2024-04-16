@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm"
-import { db, db_ident_pk_with } from "../db"
+import { db, ident_pk } from "../db"
 import { locale_insert } from "../locale"
 import { $vocadb_album, $vocadb_artist, $vocadb_song, $youtube_video } from "../schema"
 import { ProgressRef } from "../server"
@@ -149,7 +149,7 @@ export async function pass_track_meta_vocadb() {
 	const pc = new ProgressRef(DIDENT)
 
 	await run_with_concurrency_limit(k, 4, pc, async ({ id }) => {
-		const ident = db_ident_pk_with($vocadb_song, id)
+		const ident = ident_pk($vocadb_song, id)
 
 		const resp = await fetch(`https://vocadb.net/api/songs/${id}?fields=Names,Albums,Artists,WebLinks,PVs`, {
 			headers: {
@@ -180,23 +180,39 @@ export async function pass_track_meta_vocadb() {
 			// we want the artists who took part in singing or producing the song
 			// not the animators or illustrators
 
+			const known_not_wanted_roles = [
+				'Animator',
+				'Illustrator'
+			]
+
+			const wanted_roles = [
+				'Vocalist',
+				'Producer',
+				'Composer',
+				'Default',
+				'Arranger',
+				'Mastering',
+				'Lyricist',
+				'VoiceManipulator',
+			]
+
 			const artists: ArtistList<VocaDBArtistId> = []
 
-			for (const artist of json.artists) {
-				if (artist.effectiveRoles.includes('Illustrator') || artist.effectiveRoles.includes('Animator')) {
+			for (const artist of json.artists) {				
+				// if only they had better documentation...
+				// https://github.com/VocaDB/vocadb/blob/af2e4adb2b96b18ddbcca74116b2cbdb4bd44f95/VocaDbWeb/Scripts/Models/Artists/ArtistCategories.ts#L2
+				// https://github.com/VocaDB/vocadb/blob/af2e4adb2b96b18ddbcca74116b2cbdb4bd44f95/VocaDbWeb/Scripts/DataContracts/Song/SongDetailsForApi.ts#L156
+
+				const roles = artist.roles.split(',').map(it => it.trim())
+				const effective_roles = artist.effectiveRoles.split(',').map(it => it.trim())
+				const union = new Set([...roles, ...effective_roles])
+
+				if (!wanted_roles.some(it => union.has(it))) {
+					if (!known_not_wanted_roles.some(it => union.has(it))) {
+						console.log('vocadb: unknown artist role (exiting)', artist.effectiveRoles, artist.effectiveRoles)
+					}
 					continue
 				}
-
-				/* const known_roles = [
-					'Default',
-					'Arranger',
-					'Composer',
-					'Mixer',
-				]
-
-				if (!known_roles.includes(artist.effectiveRoles)) {
-					console.log('vocadb: unknown artist role (proceeding)', artist.effectiveRoles, artist.effectiveRoles)
-				} */
 
 				// ignore missing artists
 				if (!artist.artist) {
@@ -297,7 +313,7 @@ export async function pass_album_meta_vocadb() {
 	const pc = new ProgressRef(DIDENT)
 
 	await run_with_concurrency_limit(k, 10, pc, async ({ id }) => {
-		const ident = db_ident_pk_with($vocadb_album, id)
+		const ident = ident_pk($vocadb_album, id)
 
 		const resp = await fetch(`https://vocadb.net/api/albums/${id}?fields=WebLinks,Names,MainPicture,Discs,Tracks,Description,Artists`, {
 			headers: {
@@ -434,7 +450,7 @@ export async function pass_artist_meta_vocadb() {
 	const pc = new ProgressRef(DIDENT)
 
 	await run_with_concurrency_limit(k, 4, pc, async ({ id }) => {
-		const ident = db_ident_pk_with($vocadb_artist, id)
+		const ident = ident_pk($vocadb_artist, id)
 
 		const resp = await fetch(`https://vocadb.net/api/artists/${id}?fields=Names,Description,MainPicture,BaseVoicebank,WebLinks`, {
 			headers: {

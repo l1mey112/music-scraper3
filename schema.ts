@@ -7,20 +7,20 @@ import { sql } from "drizzle-orm";
 // a default index is created on primary keys anyway
 
 export const $track = sqliteTable('track', {
-	id: integer('id').$type<TrackId>().notNull(),
+	id: integer('id').$type<TrackId>().primaryKey(),
 
 	// more fields...
 })
 
 // TODO: needs joining table
 export const $album = sqliteTable('album', {
-	id: integer('id').$type<AlbumId>().notNull(),
+	id: integer('id').$type<AlbumId>().primaryKey(),
 
 	// more fields...
 })
 
 export const $artist = sqliteTable('artist', {
-	id: integer('id').$type<ArtistId>().notNull(),
+	id: integer('id').$type<ArtistId>().primaryKey(),
 
 	// more fields...
 })

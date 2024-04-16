@@ -4,7 +4,7 @@
 import { sql } from "drizzle-orm"
 import { locale_current, locale_insert } from "../locale"
 import { $spotify_artist } from "../schema"
-import { db, db_ident_pk_with } from "../db"
+import { db, ident_pk } from "../db"
 import { db_backoff_or_delete, db_backoff_sql, run_with_concurrency_limit } from "../util"
 import { ProgressRef } from "../server"
 import { link_insert, links_from_text } from "./links"
@@ -131,19 +131,24 @@ export async function pass_artist_meta_spotify_supplementary() {
 			return
 		}
 
-		const ident = db_ident_pk_with($spotify_artist, artist.id)
+		const ident = ident_pk($spotify_artist, artist.id)
 
 		db.transaction(db => {
-			const links: string[] = [...data.external_links, ...links_from_text(data.biography)]
+			const links: string[] = [...data.external_links]
 
-			const biography: Locale = {
-				ident,
-				locale: locale_current(),
-				part: LocalePart.description,
-				text: data.biography,
+			if (data.biography) {
+				links.push(...links_from_text(data.biography))
+
+				const biography: Locale = {
+					ident,
+					locale: locale_current(),
+					part: LocalePart.description,
+					text: data.biography,
+				}
+
+				locale_insert(biography)
 			}
 
-			locale_insert(biography)
 			link_insert(links.map(it => ({ ident, kind: 'unknown', data: it })))
 
 			db.update($spotify_artist)
@@ -181,7 +186,7 @@ export type SpotifyArtistInitialData = {
 	avatar_extracted_colour_dark?: string // hex
 	avatar_extracted_colour_raw?: string // hex
 	external_links: string[]
-	biography: string
+	biography: string | null
 }
 
 interface RawArtistInitialData {

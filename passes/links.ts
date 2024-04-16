@@ -1,5 +1,5 @@
 import { parse as tldts_parse } from "tldts"
-import { db, db_ident_pk } from "../db"
+import { db } from "../db"
 import { sql } from "drizzle-orm"
 import { ProgressRef } from "../server"
 import { SQLiteTable } from "drizzle-orm/sqlite-core"

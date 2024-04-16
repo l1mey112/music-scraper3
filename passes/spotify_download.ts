@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { db, db_ident_pk_with } from "../db";
+import { db, ident_pk } from "../db";
 import { $sources, $spotify_track } from "../schema";
 import { ProgressRef } from "../server";
 import { zotify_credentials } from "../cred_api";
@@ -28,7 +28,7 @@ export async function pass_sources_download_from_youtube_video_zotify() {
 	const pc = new ProgressRef(DIDENT)
 
 	await run_with_concurrency_limit(k, 20, pc, async ({ id }) => {
-		const ident = db_ident_pk_with($spotify_track, id)
+		const ident = ident_pk($spotify_track, id)
 		const [path, hash_part] = db_fs_sharded_path_noext_nonlazy()
 
 		const folder = dirname(path)
