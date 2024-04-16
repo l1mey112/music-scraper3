@@ -109,7 +109,6 @@ function karent_extract_artist(html: string) {
 		element(e) {
 			const href = e.getAttribute('href')
 			if (href) {
-				console.log(href)
 				derived_urls.push(href)
 			}
 		}

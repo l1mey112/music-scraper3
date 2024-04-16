@@ -180,22 +180,6 @@ export const $images = sqliteTable('images', {
 	pkidx: index("images.ident_idx").on(t.ident, t.hash),
 }))
 
-// `width` and `height` are optional, they are only present in video sources
-
-// a source is a video/audio file, always containing some form of audio
-// WITHOUT-ROWID: sources
-export const $sources = sqliteTable('sources', {
-	hash: text('hash').$type<FSRef>().primaryKey(),
-	ident: text('ident').$type<Ident>().notNull(),
-	track_id: integer('track_id').$type<TrackId>(),
-	width: integer('width'),
-	height: integer('height'),
-	bitrate: integer('bitrate').notNull(), // in Hz, not kHz (bitrate, not sample rate)
-	fingerprint: integer('fingerprint').$type<AudioFingerprintId>(),
-}, (t) => ({
-	//pidx0: index("sources.idx0").on(t.ident, t.fingerprint),
-	pidx1: index("sources.idx1").on(t.fingerprint),
-}))
 
 // chromaprint is a 32-bit integer array, usually bounded by 120 seconds or less
 // this doesn't represent the entire length of the audio
@@ -204,13 +188,25 @@ export const $sources = sqliteTable('sources', {
 // compression of a chromaprint is a BAD idea, the entropy is already way too high
 // i tried, you'll save 100 bytes in 4000, not worth it
 
-// rowid is beneficial here. forces integer type (no affinity) on the PK
-// and because we're storing big data in here (>200 bytes on 4KiB page)
-// https://www.sqlite.org/withoutrowid.html
-export const $audio_fingerprint = sqliteTable('audio_fingerprint', {
-	id: integer('id').$type<AudioFingerprintId>().primaryKey(),
-	chromaprint: blob('chromaprint').$type<Uint8Array>().notNull(),
-	duration_s: real('duration_s').notNull(), // not accurate to sources, but within 7 seconds
+// acoustid performs interning of chromaprint/fingerprints. as much as i would like
+// to do this (saving 5.59KiBs * 1 less chromaprint), it increases complexity and
+// i hate it when queries have multiple indirections
+
+// a source is a video/audio file, always containing some form of audio
+// width and height are optional, they are only present in video sources
+// WITHOUT-ROWID: sources
+export const $sources = sqliteTable('sources', {
+	hash: text('hash').$type<FSRef>().primaryKey(),
+	ident: text('ident').$type<Ident>().notNull(),
+	track_id: integer('track_id').$type<TrackId>(),
+	width: integer('width'),
+	height: integer('height'),
+	bitrate: integer('bitrate').notNull(), // in Hz, not kHz (bitrate, not sample rate)
+	chromaprint: blob('chromaprint').$type<Uint8Array>(),
+	duration_s: real('duration_s'), // not accurate to sources, but within 7 seconds
 }, (t) => ({
-	pidx: index("audio_fingerprint.idx").on(t.duration_s, t.chromaprint),
+	pk: index("sources.idx").on(t.ident, t.hash, t.track_id),
+	pfp: index("sources.audio_fingerprint.idx").on(t.duration_s, t.chromaprint),
+	//pidx0: index("sources.idx0").on(t.ident, t.fingerprint),
+	//pidx1: index("sources.idx1").on(t.fingerprint),
 }))

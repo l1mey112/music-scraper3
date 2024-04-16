@@ -185,7 +185,7 @@ async function state_machine() {
 			const pass = pass_state.current_pass.blocks[pass_state.current_pass.idx] as PassBlock
 
 			try {
-				await Bun.sleep(50) // much cooler than instananous execution
+				await Bun.sleep(10) // much cooler than instananous execution
 				if (await pass.fn()) {
 					pass_state.current_pass.mutations.add(pass_state.current_pass.idx)
 				}

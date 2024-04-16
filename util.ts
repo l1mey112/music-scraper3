@@ -6,9 +6,13 @@ import { DAYS, Ident, PassIdentifier } from "./types"
 import { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core"
 import { WyHash } from "./types"
 
-export function assert(condition: boolean, message: string): void {
+export function assert(condition: boolean, message?: string): void {
 	if (!condition) {
-		console.error(`assertion failed: ${message}`)
+		if (message) {
+			console.error(`assertion failed: ${message}`)
+		} else {
+			console.error('assertion failed')
+		}
 		console.log(new Error().stack)
 		process.exit(1)
 	}

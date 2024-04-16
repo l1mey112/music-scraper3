@@ -3,7 +3,7 @@ import { db } from "../db"
 import { ProgressRef } from "../server"
 import { $ } from 'bun'
 import { db_backoff_forever, db_backoff_sql, run_with_concurrency_limit } from "../util"
-import { $audio_fingerprint, $sources } from "../schema"
+import { $sources } from "../schema"
 import { db_fs_hash_path } from "../db_misc"
 import { Ident } from "../types"
 
@@ -19,7 +19,7 @@ export async function pass_sources_classify_audio_fingerprint() {
 	let updated = false
 	const k = db.select({ hash: $sources.hash })
 		.from($sources)
-		.where(sql`${$sources.fingerprint} is null and ${db_backoff_sql(DIDENT, $sources, $sources.hash)}`)
+		.where(sql`${$sources.chromaprint} is null and ${db_backoff_sql(DIDENT, $sources, $sources.hash)}`)
 		.all()
 
 	const pc = new ProgressRef(DIDENT)
@@ -52,13 +52,8 @@ export async function pass_sources_classify_audio_fingerprint() {
 		}
 
 		db.transaction(db => {
-			const g = db.insert($audio_fingerprint)
-				.values({ chromaprint: new Uint8Array(fingerprint.buffer), duration_s: json.duration })
-				.returning()
-				.get()
-
 			db.update($sources)
-				.set({ fingerprint: g.id })
+				.set({ chromaprint: new Uint8Array(fingerprint.buffer), duration_s: json.duration })
 				.where(sql`${$sources.hash} = ${hash}`)
 				.run()
 		})

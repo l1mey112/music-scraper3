@@ -4,6 +4,7 @@ import { $locale, $links } from "./schema";
 export type MaybePromise<T> = T | Promise<T>
 export type Override<T1, T2> = Omit<T1, keyof T2> & T2;
 export type NewType<K, T> = T & { readonly __newtype: K }
+export type NullMit<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 
 export type TrackId = NewType<'TrackId', number>
 export type AlbumId = NewType<'AlbumId', number>

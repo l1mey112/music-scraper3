@@ -11,7 +11,8 @@ import { pass_album_meta_vocadb, pass_artist_meta_vocadb, pass_track_meta_vocadb
 import { pass_album_meta_spotify, pass_artist_meta_spotify, pass_track_meta_spotify } from "./passes/spotify"
 import { pass_sources_download_from_youtube_video_zotify } from "./passes/spotify_download"
 import { pass_artist_meta_spotify_supplementary } from "./passes/spotify_raw"
-import { pass_artist_classify_auto } from "./passes/classify"
+import { pass_artist_classify_auto } from "./passes/classify_artist"
+import { pass_track_classify_from_other_tracks, pass_track_classify_from_source_fingerprint } from "./passes/classify_track"
 
 export const passes: PassElement[] = [
 	[
@@ -42,8 +43,10 @@ export const passes: PassElement[] = [
 		],
 	],
 	{ name: 'images.download.url_to_hash', fn: pass_images_download_url_to_hash },
-	/* { name: 'sources.download.from_spotify_track_zotify', fn: pass_sources_download_from_youtube_video_zotify },
+	{ name: 'sources.download.from_spotify_track_zotify', fn: pass_sources_download_from_youtube_video_zotify },
 	{ name: 'sources.download.from_youtube_video_ytdlp', fn: pass_sources_download_from_youtube_video_ytdlp },
-	{ name: 'sources.classify.audio_fingerprint', fn: pass_sources_classify_audio_fingerprint }, */
+	{ name: 'sources.classify.audio_fingerprint', fn: pass_sources_classify_audio_fingerprint },
 	{ name: 'artist.classify.auto', fn: pass_artist_classify_auto },
+	{ name: 'track.classify.from_source_fingerprint', fn: pass_track_classify_from_source_fingerprint },
+	{ name: 'track.classify.from_other_tracks', fn: pass_track_classify_from_other_tracks },
 ]

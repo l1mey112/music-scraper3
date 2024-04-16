@@ -6,7 +6,7 @@ import { $spotify_artist, $spotify_album, $youtube_video, $youtube_channel, $ima
 import { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { Ident } from './types'
 
-const sqlite: Database = new Database('db.sqlite', { create: false, readwrite: true })
+export const sqlite: Database = new Database('db.sqlite', { create: false, readwrite: true })
 
 // https://phiresky.github.io/blog/2020/sqlite-performance-tuning/
 sqlite.exec("pragma journal_mode = WAL;")

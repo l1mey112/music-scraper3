@@ -15,9 +15,7 @@ export function pass_artist_classify_auto() {
 
 	const valid_tables = new Map<SQLiteTable, LinkKind>(valid_table_rows)
 
-	// select the first random one, then follow paths
-
-	let start_idents = new Set<Ident>()
+	const start_idents = new Set<Ident>()
 
 	for (let i = 0; i < valid_table_rows.length; i++) {
 		const sel = valid_table_rows[i][0]
