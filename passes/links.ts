@@ -284,6 +284,7 @@ export function pass_all_extrapolate_from_links() {
 				// keep link, insert new data
 				db.insert(table_to)
 					.values({ id: link.data })
+					.onConflictDoNothing()
 					.run()
 			}
 

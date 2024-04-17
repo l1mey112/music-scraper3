@@ -182,7 +182,8 @@ export async function pass_track_meta_vocadb() {
 
 			const known_not_wanted_roles = [
 				'Animator',
-				'Illustrator'
+				'Illustrator',
+				'Instrumentalist',
 			]
 
 			const wanted_roles = [
@@ -194,6 +195,7 @@ export async function pass_track_meta_vocadb() {
 				'Mastering',
 				'Lyricist',
 				'VoiceManipulator',
+				'Publisher',
 			]
 
 			const artists: ArtistList<VocaDBArtistId> = []
@@ -209,7 +211,7 @@ export async function pass_track_meta_vocadb() {
 
 				if (!wanted_roles.some(it => union.has(it))) {
 					if (!known_not_wanted_roles.some(it => union.has(it))) {
-						console.log('vocadb: unknown artist role (exiting)', artist.effectiveRoles, artist.effectiveRoles)
+						console.log(`vocadb: ${id} unknown artist role (exiting)`, artist.effectiveRoles, artist.effectiveRoles)
 					}
 					continue
 				}

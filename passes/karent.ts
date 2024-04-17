@@ -44,9 +44,9 @@ function karent_extract_album(html: string): [KarentArtistId | undefined, string
 	return [artist_id, derived_urls]
 }
 
-// karent_album.meta.karent_album
+// album.meta.karent
 export async function pass_karent_album_meta_karent_album() {
-	const DIDENT = 'karent_album.meta.karent_album'
+	const DIDENT = 'album.meta.karent'
 
 	// karent albums, like most distributors, don't have their data changing
 	// its quite rare, just issue infinite backoffs
@@ -119,9 +119,9 @@ function karent_extract_artist(html: string) {
 	return derived_urls
 }
 
-// karent_artist.meta.karent_artist
+// artist.meta.karent
 export async function pass_karent_artist_meta_karent_artist() {
-	const DIDENT = 'karent_artist.meta.karent_artist'
+	const DIDENT = 'artist.meta.karent'
 
 	let updated = false
 	const k = db.select({ id: $karent_artist.id })

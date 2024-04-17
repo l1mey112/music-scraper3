@@ -218,3 +218,16 @@ export function emit_log(message: string, level: LogLevel = 'log') {
 	components.set(elm, 'right')
 	component_append(elm)
 }
+
+// console.log overrides
+
+const log_setup = ['log', 'warn', 'error'] as const
+
+for (const level of log_setup) {
+	const orig = console[level]
+
+	console[level] = function(obj: any, ...args: any[]) {
+		orig(obj, ...args)
+		emit_log(Array.from(arguments).join(' '), level)
+	}
+}

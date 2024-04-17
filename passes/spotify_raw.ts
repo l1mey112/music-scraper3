@@ -109,7 +109,7 @@ export async function pass_artist_meta_spotify_supplementary() {
 	let updated = false
 	const k = db.select({ id: $spotify_artist.id })
 		.from($spotify_artist)
-		.where(sql`spotify_followers is null or spotify_monthly_listeners is null
+		.where(sql`(spotify_followers is null or spotify_monthly_listeners is null)
 			and ${db_backoff_sql(DIDENT, $spotify_artist, $spotify_artist.id)}`)
 		.all()
 
