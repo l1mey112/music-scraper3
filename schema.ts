@@ -17,13 +17,25 @@ export const $track = sqliteTable('track', {
 // TODO: needs joining table
 export const $album = sqliteTable('album', {
 	id: integer('id').$type<AlbumId>().primaryKey(),
+
+	name: text('name'), // name in default locale
+	cover_image: text('cover_image').$type<FSRef>(),
 })
+
+export const $album_tracks = sqliteTable('album_tracks', {
+	album_id: integer('album_id').$type<AlbumId>().notNull(),
+	track_id: integer('track_id').$type<TrackId>().notNull(),
+	disc: integer('disc').notNull(),
+	i: integer('i').notNull(),
+}, (t) => ({
+	pk: primaryKey({ columns: [t.album_id, t.track_id] }),
+}))
 
 export const $artist = sqliteTable('artist', {
 	id: integer('id').$type<ArtistId>().primaryKey(),
 
 	name: text('name'), // name in default locale
-	profile_image: text('profile_image').$type<FSRef>(),
+	profile_image: text('profile_image').$type<FSRef>(), // can stay null, artist might not always have an image
 })
 
 // TODO: it would be nice to have a nullable `locale` instead of `--`

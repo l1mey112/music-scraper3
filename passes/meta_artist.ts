@@ -4,31 +4,7 @@ import { $artist, $images, $locale, $spotify_artist, $vocadb_artist, $youtube_ch
 import { ArtistId, FSRef, Ident, ImageKind, LocalePart, LocaleRef } from "../types";
 import { locale_current, locale_script_equal } from "../locale";
 import { SQLiteTable } from "drizzle-orm/sqlite-core";
-
-function extract_idents(artist_id: ArtistId, order: SQLiteTable[]): Ident[] {
-	const idents: Ident[] = []
-	
-	for (const meta_table of order) {
-		const meta = db.select({ id: sql<string | number>`id` })
-			.from(meta_table)
-			.where(sql`artist_id = ${artist_id}`)
-			.get()
-
-		if (!meta) {
-			continue
-		}
-
-		const ident = ident_pk(meta_table, meta.id)
-		
-		if (idents.includes(ident)) {
-			continue
-		}
-
-		idents.push(ident)
-	}
-
-	return idents
-}
+import { extract_idents } from "./meta_track";
 
 // will iterate in order, leaving the last Idents to take precedence and remain
 // which means you should probably generate your Idents in reverse
@@ -68,14 +44,50 @@ export function pick_best_locale_name(locale_idents: Ident[]): string | undefine
 	return chosen_locale.text
 }
 
+export function pick_best_image_kind(image_idents: Ident[], kind: ImageKind): FSRef | undefined {
+	type ChosenProfileImage = {
+		hash: FSRef,
+		width: number,
+		height: number,
+	}
+
+	let chosen_profile_image: ChosenProfileImage | undefined
+
+	for (const ident of image_idents) {
+		const images = db.select({ hash: $images.hash, width: $images.width, height: $images.height })
+			.from($images)
+			.where(sql`ident = ${ident} and kind = ${kind}`)
+			.all()
+
+		for (const image of images) {
+			if (!chosen_profile_image) {
+				chosen_profile_image = image
+				continue
+			}
+
+			if (image.width * image.height > chosen_profile_image.width * chosen_profile_image.height) {
+				chosen_profile_image = image
+				break
+			}
+		}
+	}
+
+	if (!chosen_profile_image) {
+		return
+	}
+
+	return chosen_profile_image.hash
+}
+
 // artist.meta.assign
 export function pass_artist_meta_assign() {
 	let updated = false
 	const k = db.select({ id: $artist.id })
 		.from($artist)
-		.where(sql`name is null or profile_image is null`)
+		.where(sql`name is null`)
 		.all()
 
+	const preferred_locale = locale_current()
 
 	function classify(artist_id: ArtistId) {
 
@@ -89,7 +101,7 @@ export function pass_artist_meta_assign() {
 		let chosen_locale: ChosenLocale | undefined
 
 		// reverse so worse locales (lower quality sources) are overwritten nearing the end
-		const locale_idents = extract_idents(artist_id, [
+		const locale_idents = extract_idents(artist_id, 'artist_id', [
 			$youtube_channel,
 			$spotify_artist,
 			$vocadb_artist,
@@ -118,45 +130,16 @@ export function pass_artist_meta_assign() {
 			return
 		}
 
-		const image_idents = extract_idents(artist_id, [
+		const image_idents = extract_idents(artist_id, 'artist_id', [
 			$vocadb_artist,
 			$spotify_artist,
 			$youtube_channel,
 		])
 
-		type ChosenProfileImage = {
-			hash: FSRef,
-			width: number,
-			height: number,
-		}
-		
-		let chosen_profile_image: ChosenProfileImage | undefined
-
-		for (const ident of image_idents) {
-			const images = db.select({ hash: $images.hash, width: $images.width, height: $images.height })
-				.from($images)
-				.where(sql`ident = ${ident} and kind = ${'profile_art' satisfies ImageKind}`)
-				.all()
-
-			for (const image of images) {
-				if (!chosen_profile_image) {
-					chosen_profile_image = image
-					continue
-				}
-
-				if (image.width * image.height > chosen_profile_image.width * chosen_profile_image.height) {
-					chosen_profile_image = image
-					break
-				}
-			}
-		}
-
-		if (!chosen_profile_image) {
-			return
-		}
+		const profile_hash = pick_best_image_kind(image_idents, 'profile_art')
 
 		db.update($artist)
-			.set({ name: chosen_locale.text, profile_image: chosen_profile_image.hash })
+			.set({ name: chosen_locale.text, profile_image: profile_hash })
 			.where(sql`id = ${artist_id}`)
 			.run()
 		

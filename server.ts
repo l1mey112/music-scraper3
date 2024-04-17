@@ -251,10 +251,10 @@ for (const level of log_setup) {
 		let prefix = ''
 
 		if (typeof obj === 'string') {
-			args.unshift(prefix + obj)
+			args.unshift(/* prefix + */ obj)
 		} else {
 			args.unshift(obj)
-			args.unshift(prefix)
+			//args.unshift(prefix)
 		}
 
 		orig(...args)

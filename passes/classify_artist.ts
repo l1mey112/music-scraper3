@@ -1,41 +1,15 @@
 import { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core"
 import { $artist, $karent_artist, $links, $locale, $spotify_artist, $vocadb_artist, $youtube_channel } from "../schema"
-import { ArtistId, Ident, LinkKind } from "../types"
+import { ArtistId, Ident, KV, LinkKind } from "../types"
 import { db, ident_pk, ident_pk_reverse } from "../db"
 import { SQL, sql } from "drizzle-orm"
 
-// artist.classify.auto
-export function pass_artist_classify_auto() {
-	const valid_table_rows = [
-		[$spotify_artist, 'sp_artist_id'],
-		[$youtube_channel, 'yt_channel_id'],
-		[$vocadb_artist, 'vd_artist_id'],
-		[$karent_artist, 'ka_artist_id'],
-	] as const
+export function table_link_walker(start_idents: Set<Ident>, valid_table_kv: KV<LinkKind, SQLiteTable>, shared_links_joins: LinkKind[], fn: (_: Iterable<Ident>) => void): boolean {
+	let updated = false
 
-	const valid_tables = new Map<SQLiteTable, LinkKind>(valid_table_rows)
-
-	const start_idents = new Set<Ident>()
-
-	for (let i = 0; i < valid_table_rows.length; i++) {
-		const sel = valid_table_rows[i][0]
-
-		// good thing sqlite is dynamically typed
-
-		const k = db.select({ id: sql<string | number>`id` })
-			.from(sel)
-			.where(sql`artist_id is null`)
-			.all()
-
-		for (const { id } of k) {
-			start_idents.add(ident_pk(sel, id))
-		}
-	}
-
-	// none today
-	if (start_idents.size === 0) {
-		return
-	}
+	const valid_tables = new Map<SQLiteTable, LinkKind>(
+		Object.entries(valid_table_kv).map(([k, v]) => [v, k as LinkKind])
+	)
 
 	// no sql injection here i hope
 	function sql_raw_kind_in(kinds: Iterable<string>) {
@@ -46,16 +20,11 @@ export function pass_artist_classify_auto() {
 		return sql.raw('(' + [...valid_tables.keys()].map(t => `'${ident_pk(t)}'`).join(', ') + ')')
 	}
 
-	let updated = false
-
 	function classify(start_ident: Ident) {
 		const visited = new Set<Ident>()
 
 		// TODO: twitter links etc
-		const shared_links = new Map<LinkKind, Set<string>>([
-			['tw_user', new Set()],
-			['pi_creator', new Set()],
-		])
+		const shared_links = new Map<LinkKind, Set<string>>(shared_links_joins.map(k => [k, new Set<string>()]))
 
 		// start> spotify id -> karent
 		//          ^             \
@@ -131,7 +100,7 @@ export function pass_artist_classify_auto() {
 			}
 		}
 
-		unify(visited)
+		fn(visited)
 		updated = true
 	}
 
@@ -140,6 +109,49 @@ export function pass_artist_classify_auto() {
 	}
 
 	return updated
+}
+
+export function table_column_null(tables: Iterable<SQLiteTable>, column: SQLiteColumn | SQL): Set<Ident> {
+	const idents = new Set<Ident>()
+
+	for (const sel of tables) {
+		// good thing sqlite is dynamically typed
+
+		const k = db.select({ id: sql<string | number>`id` })
+			.from(sel)
+			.where(sql`${column} is null`)
+			.all()
+
+		for (const { id } of k) {
+			idents.add(ident_pk(sel, id))
+		}
+	}
+
+	return idents
+}
+
+// artist.classify.auto
+export function pass_artist_classify_auto() {
+	const valid_search_tables: KV<LinkKind, SQLiteTable> = {
+		sp_artist_id: $spotify_artist,
+		yt_channel_id: $youtube_channel,
+		vd_artist_id: $vocadb_artist,
+		ka_artist_id: $karent_artist,
+	}
+
+	const shared_links: LinkKind[] = [
+		'tw_user',
+		'pi_creator',
+	]
+
+	const start_idents = table_column_null(Object.values(valid_search_tables), sql`artist_id`)
+
+	// none today
+	if (start_idents.size === 0) {
+		return
+	}
+
+	return table_link_walker(start_idents, valid_search_tables, shared_links, unify)
 }
 
 function unify(together: Iterable<Ident>) {

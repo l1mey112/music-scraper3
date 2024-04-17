@@ -14,6 +14,9 @@ stmts=(
 	# cosmo@bousou-p
 	#"insert into spotify_track (id) values ('1rkDWkKb9J4A37J91U6eUW');"
 	#"insert into youtube_video (id) values ('XwCv6Gm3Q3Q');"
+
+	# untouchable - hazardous bubble basics
+	#"insert into spotify_track (id) values ('7rL7z9CpB2aXEfmY5AA6VP');"
 )
 
 for stmt in "${stmts[@]}"; do

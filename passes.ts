@@ -15,6 +15,8 @@ import { pass_artist_classify_auto } from "./passes/classify_artist"
 import { pass_track_classify_artists, pass_track_classify_from_other_tracks, pass_track_classify_from_source_fingerprint } from "./passes/classify_track"
 import { pass_artist_meta_assign } from "./passes/meta_artist"
 import { pass_track_meta_assign } from "./passes/meta_track"
+import { pass_album_classify_auto } from "./passes/classify_album"
+import { pass_album_meta_assign } from "./passes/meta_album"
 
 export const passes: PassElement[] = [
 	[
@@ -54,4 +56,6 @@ export const passes: PassElement[] = [
 	{ name: 'track.classify.artists', fn: pass_track_classify_artists },
 	{ name: 'artist.meta.assign', fn: pass_artist_meta_assign },
 	{ name: 'track.meta.assign', fn: pass_track_meta_assign },
+	{ name: 'album.classify.auto', fn: pass_album_classify_auto },
+	{ name: 'album.meta.assign', fn: pass_album_meta_assign },
 ]

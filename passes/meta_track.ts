@@ -1,17 +1,22 @@
 import { SQLiteTable } from "drizzle-orm/sqlite-core"
-import { FSRef, Ident, TrackId } from "../types"
+import { AlbumId, ArtistId, FSRef, Ident, TrackId } from "../types"
 import { db, ident_pk } from "../db"
 import { sql } from "drizzle-orm"
 import { $sources, $spotify_track, $track, $vocadb_song, $youtube_video } from "../schema"
 import { pick_best_locale_name } from "./meta_artist"
 
-function extract_idents(track_id: TrackId, order: SQLiteTable[]): Ident[] {
+type TrackIdToCol<T extends TrackId | AlbumId | ArtistId> = T extends TrackId
+	? 'track_id' : T extends AlbumId
+	? 'album_id'
+	: 'artist_id'
+
+export function extract_idents<T extends TrackId | AlbumId | ArtistId>(id: T, column: TrackIdToCol<T>, order: SQLiteTable[]): Ident[] {
 	const idents: Ident[] = []
-	
+
 	for (const meta_table of order) {
 		const meta = db.select({ id: sql<string | number>`id` })
 			.from(meta_table)
-			.where(sql`track_id = ${track_id}`)
+			.where(sql`${sql.raw(column)} = ${id}`)
 			.get()
 
 		if (!meta) {
@@ -56,7 +61,7 @@ export function pass_track_meta_assign() {
 		.all()
 
 	function classify(track_id: TrackId) {
-		const idents = extract_idents(track_id, [
+		const idents = extract_idents(track_id, 'track_id', [
 			$youtube_video,
 			$spotify_track,
 			$vocadb_song,
