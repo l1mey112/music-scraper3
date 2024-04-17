@@ -12,7 +12,7 @@ import { pass_album_meta_spotify, pass_artist_meta_spotify, pass_track_meta_spot
 import { pass_sources_download_from_youtube_video_zotify } from "./passes/spotify_download"
 import { pass_artist_meta_spotify_supplementary } from "./passes/spotify_raw"
 import { pass_artist_classify_auto } from "./passes/classify_artist"
-import { pass_track_classify_from_other_tracks, pass_track_classify_from_source_fingerprint } from "./passes/classify_track"
+import { pass_track_classify_artists, pass_track_classify_from_other_tracks, pass_track_classify_from_source_fingerprint } from "./passes/classify_track"
 
 export const passes: PassElement[] = [
 	[
@@ -49,4 +49,5 @@ export const passes: PassElement[] = [
 	{ name: 'artist.classify.auto', fn: pass_artist_classify_auto },
 	{ name: 'track.classify.from_source_fingerprint', fn: pass_track_classify_from_source_fingerprint },
 	{ name: 'track.classify.from_other_tracks', fn: pass_track_classify_from_other_tracks },
+	{ name: 'track.classify.artists', fn: pass_track_classify_artists },
 ]

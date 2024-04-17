@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db, ident_pk, ident_pk_reverse, sqlite } from "../db";
-import { $links, $sources, $spotify_track, $track, $vocadb_song, $youtube_video } from "../schema";
-import { FSRef, Ident, LinkKind, NullMit, TrackId, VocaDBSongId } from "../types";
+import { $links, $sources, $spotify_artist, $spotify_track, $track, $vocadb_artist, $vocadb_song, $youtube_channel, $youtube_video } from "../schema";
+import { ArtistId, ArtistList, FSRef, Ident, LinkKind, NullMit, TrackId, VocaDBSongId } from "../types";
 import { assert } from "../util";
 import { SQLiteTable } from "drizzle-orm/sqlite-core";
 
@@ -316,6 +316,115 @@ export async function pass_track_classify_from_other_tracks() {
 			classify(table)
 		}
 	})
+
+	return updated
+}
+
+// track.classify.artists
+export async function pass_track_classify_artists() {
+	let updated = false
+	const k = db.select({ id: $track.id })
+		.from($track)
+		.where(sql`artists is null`)
+		.all()
+
+	// spotify provides artists (most accurate)
+	// vocadb provides artists  (as accurate, more than presented)
+	// youtube provides artist  (singular)
+
+	// source | source.column | artist table
+
+	type Mappingkey = keyof typeof valid_tables
+	type Mapping = Map<Mappingkey, ArtistList<ArtistId>>
+
+	function classify(track_id: TrackId, mapping: Mapping) {
+		// the first artist is the main artist
+		// it may be contested, which shouldn't happen ever
+		// if it doesn't, don't compromise the track, just append them all
+
+		const order = Object.keys(valid_tables) as Mappingkey[]
+		const new_listing: ArtistList<ArtistId> = []
+
+		// iterate in order of priority
+		// repeatedly shift elements into the sorted set, which is `new_listing`
+
+		while (mapping.size > 0) {
+			for (const name of order) {
+				const map =  mapping.get(name)
+
+				if (!map) {
+					continue
+				}
+
+				const artist = map.shift()!
+
+				if (!new_listing.includes(artist)) {
+					new_listing.push(artist)
+				}
+
+				if (map.length === 0) {
+					mapping.delete(name)
+				}
+			}
+		}
+
+		db.update($track)
+			.set({ artists: new_listing })
+			.where(sql`id = ${track_id}`)
+			.run()
+
+		updated = true
+	}
+
+	const valid_tables = {
+		spotify_track: [$spotify_track, $spotify_track.spotify_artists, $spotify_artist ],
+		vocadb_song:   [$vocadb_song,   $vocadb_song.vocadb_artists,    $vocadb_artist  ],
+		youtube_video: [$youtube_video, $youtube_video.channel_id,      $youtube_channel],
+	} as const
+
+	for (const { id: track_id } of k) {
+		const mapping: Mapping = new Map()
+
+		for (const [name, [source_table, source_column, artist_table]] of Object.entries(valid_tables)) {
+			const k = db.select({ target: source_column })
+				.from(source_table)
+				.where(sql`track_id = ${track_id} and ${source_column} is not null`)
+				.get()
+
+			if (!k) {
+				continue
+			}
+
+			let ids
+			if (typeof k.target === 'string') {
+				ids = [k.target]
+			} else {
+				ids = k.target!
+			}
+
+			const artist_ids: ArtistList<ArtistId> = []
+
+			// convert ids to artist ids
+			for (const id of ids) {
+				const artist = db.select({ artist_id: artist_table.artist_id })
+					.from(artist_table)
+					.where(sql`${artist_table.id} = ${id} and ${artist_table.artist_id} is not null`)
+					.get()!
+
+				// add artist to track_artists
+				artist_ids.push(artist.artist_id!)
+			}
+
+			if (artist_ids.length > 0) {
+				// ???? dumb casting
+				mapping.set(name as Mappingkey, artist_ids)
+			}
+		}
+
+		if (mapping.size > 0) {
+			classify(track_id, mapping)
+		}
+	}
 
 	return updated
 }

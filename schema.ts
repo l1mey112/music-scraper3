@@ -10,6 +10,7 @@ export const $track = sqliteTable('track', {
 	id: integer('id').$type<TrackId>().primaryKey(),
 
 	// more fields...
+	artists: text('artists', { mode: 'json' }).$type<ArtistList<ArtistId>>(),
 })
 
 // TODO: needs joining table
@@ -85,6 +86,7 @@ export const $spotify_album = sqliteTable('spotify_album', {
 	id: text('id').$type<SpotifyAlbumId>().primaryKey(),
 	album_id: integer('album_id').$type<AlbumId>(),
 
+	spotify_artist: text('spotify_artist', { mode: 'json' }).$type<SpotifyArtistId>(),
 	spotify_track_count: integer('spotify_track_count'),
 })
 
@@ -93,6 +95,7 @@ export const $spotify_track = sqliteTable('spotify_track', {
 	id: text('id').$type<SpotifyTrackId>().primaryKey(),
 	track_id: integer('track_id').$type<TrackId>(),
 
+	spotify_artists: text('spotify_artists', { mode: 'json' }).$type<ArtistList<SpotifyArtistId>>(),
 	spotify_preview_url: text('spotify_preview_url'),
 	spotify_disc_number: integer('spotify_disc_number'),
 	spotify_track_number: integer('spotify_track_number'),

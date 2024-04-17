@@ -115,7 +115,6 @@ Bun.serve<undefined>({
 				return new Response("400 Bad Request", { status: 400 })
 			}
 			default: {
-				console.log(`404 Not Found: ${url.pathname}`)
 				return new Response("404 Not Found", { status: 404 })
 			}
 		}

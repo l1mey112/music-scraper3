@@ -47,7 +47,7 @@ export async function pass_track_meta_spotify() {
 	let updated = false
 	const k = db.select({ id: $spotify_track.id })
 		.from($spotify_track)
-		.where(sql`(spotify_disc_number is null or spotify_track_number is null or spotify_album_id is null)
+		.where(sql`(spotify_artists is null or spotify_disc_number is null or spotify_track_number is null or spotify_album_id is null)
 			and ${db_backoff_sql(DIDENT, $spotify_track, $spotify_track.id)}`)
 		.all()
 
@@ -107,6 +107,7 @@ export async function pass_track_meta_spotify() {
 
 				db.update($spotify_track)
 					.set({
+						spotify_artists: artists,
 						spotify_disc_number: track.disc_number,
 						spotify_track_number: track.track_number,
 						spotify_album_id: album,
@@ -196,8 +197,10 @@ export async function pass_album_meta_spotify() {
 				text: album.name,
 			}
 
+			const artists = album.artists.map(it => it.id as SpotifyArtistId)
+
 			db.transaction(db => {
-				append_artist_ids(album.artists.map(it => it.id as SpotifyArtistId))
+				append_artist_ids(artists)
 				append_track_ids(tracks.map(it => it.id as SpotifyTrackId))
 				locale_insert(name)
 
@@ -208,6 +211,7 @@ export async function pass_album_meta_spotify() {
 
 				db.update($spotify_album)
 					.set({
+						spotify_artist: artists[0],
 						spotify_track_count: album.total_tracks,
 					})
 					.where(sql`id = ${album.id}`)
