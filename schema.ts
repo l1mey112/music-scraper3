@@ -9,22 +9,20 @@ import { name, sql } from "drizzle-orm";
 export const $track = sqliteTable('track', {
 	id: integer('id').$type<TrackId>().primaryKey(),
 
-	// more fields...
+	name: text('name'), // name in default locale
 	artists: text('artists', { mode: 'json' }).$type<ArtistList<ArtistId>>(),
+	audio_source: text('audio_source').$type<FSRef>(), // source of the track
 })
 
 // TODO: needs joining table
 export const $album = sqliteTable('album', {
 	id: integer('id').$type<AlbumId>().primaryKey(),
-
-	// more fields...
 })
 
 export const $artist = sqliteTable('artist', {
 	id: integer('id').$type<ArtistId>().primaryKey(),
 
-	// name in default locale
-	name: text('name'),
+	name: text('name'), // name in default locale
 	profile_image: text('profile_image').$type<FSRef>(),
 })
 

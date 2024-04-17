@@ -30,6 +30,44 @@ function extract_idents(artist_id: ArtistId, order: SQLiteTable[]): Ident[] {
 	return idents
 }
 
+// will iterate in order, leaving the last Idents to take precedence and remain
+// which means you should probably generate your Idents in reverse
+export function pick_best_locale_name(locale_idents: Ident[]): string | undefined {
+	const preferred_locale = locale_current()
+
+	type ChosenLocale = {
+		locale: LocaleRef,
+		text: string,
+	}
+
+	let chosen_locale: ChosenLocale | undefined
+
+	for (const ident of locale_idents) {
+		const names = db.select({ locale: $locale.locale, text: $locale.text })
+			.from($locale)
+			.where(sql`ident = ${ident} and part = ${LocalePart.name}`)
+			.all()
+
+		for (const name of names) {
+			if (!chosen_locale) {
+				chosen_locale = name
+				continue
+			}
+
+			if (locale_script_equal(preferred_locale, name.locale)) {
+				chosen_locale = name
+				break
+			}
+		}
+	}
+
+	if (!chosen_locale) {
+		return
+	}
+
+	return chosen_locale.text
+}
+
 // artist.meta.assign
 export function pass_artist_meta_assign() {
 	let updated = false
@@ -38,7 +76,6 @@ export function pass_artist_meta_assign() {
 		.where(sql`name is null or profile_image is null`)
 		.all()
 
-	const preferred_locale = locale_current()
 
 	function classify(artist_id: ArtistId) {
 

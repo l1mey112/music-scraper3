@@ -12,10 +12,12 @@ function list() {
 
 	const cards = []
 
+	//<img src={`/media?q=${i.profile_image}`} width={200} height={200} alt={i.name} />
+
 	for (const i of k) {
 		cards.push(
 			<div class="card">
-				{/* <img src={`/media?q=${i.profile_image}`} width={200} height={200} alt={i.name} /> */}
+				
 				<div class="card-body">
 					<h3>{i.name}</h3>
 				</div>

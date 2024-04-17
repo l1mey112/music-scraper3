@@ -75,21 +75,33 @@ export function locale_insert(locales: Locale | Locale[]) {
 		.run()
 }
 
+let _locale_current: LocaleRef | undefined
+
 // default database locale is "en"
+// repeated calls to this function will return the same cached locale
 export function locale_current(): LocaleRef {
+	if (_locale_current) {
+		return _locale_current
+	}
+	
 	const locale_entry = db.select({ data: $kv_store.data })
 		.from($kv_store)
 		.where(sql`kind = 'locale'`)
 		.get() as { data: LocaleRef } | undefined
 
+	let locale
+		
 	if (!locale_entry) {
 		// insert into db
 		db.insert($kv_store)
 			.values({ kind: 'locale', data: 'en' })
 			.run()
 
-		return 'en' as LocaleRef
+		locale = 'en' as LocaleRef
+	} else {
+		locale = locale_entry.data
 	}
 
-	return locale_entry.data
+	_locale_current = locale
+	return locale
 }
