@@ -13,6 +13,40 @@ export function pass_force_stop(): never {
 	throw new StopPass()
 }
 
+type PassHandler = () => MaybePromise<void>
+
+const pass_handlers = new Map<PassIdentifier, Set<PassHandler>>()
+
+export function pass_on(pass: PassIdentifier, fn: PassHandler) {
+	if (!pass_handlers.has(pass)) {
+		pass_handlers.set(pass, new Set())
+	}
+
+	pass_handlers.get(pass)!.add(fn)
+}
+
+export function pass_off(pass: PassIdentifier, fn: PassHandler) {
+	if (!pass_handlers.has(pass)) {
+		return
+	}
+
+	pass_handlers.get(pass)!.delete(fn)
+}
+
+function pass_emit(pass: PassIdentifier) {
+	if (!pass_handlers.has(pass)) {
+		return
+	}
+
+	const possible_promises: MaybePromise<void>[] = []
+
+	for (const handler of pass_handlers.get(pass)!) {
+		possible_promises.push(handler())
+	}
+
+	return Promise.all(possible_promises)
+}
+
 const TRIP_COUNT_MAX = 20
 
 type PassState = {
@@ -189,6 +223,7 @@ async function state_machine() {
 				if (await pass.fn()) {
 					pass_state.current_pass.mutations.add(pass_state.current_pass.idx)
 				}
+				await pass_emit(pass.name)
 			} catch (e) {
 				pass_state.state = PassStateEnum.Stopped
 				if (e instanceof StopPass) {

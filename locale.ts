@@ -21,6 +21,24 @@ export function locale_from_bcp_47(code: string): LocaleRef | undefined {
 	return k.language as LocaleRef
 }
 
+export function locale_script_equal(to: LocaleRef, foreign: LocaleRef): boolean {
+	if (to == foreign) {
+		return true
+	}
+	
+	const map: Record<string, LocaleRef> = {
+		'ja-latn': 'en' as LocaleRef,
+	}
+
+	const mapped = map[foreign]
+
+	if (mapped && mapped == to) {
+		return true
+	}
+
+	return false
+}
+
 export function locale_insert(locales: Locale | Locale[]) {
 	if (locales instanceof Array && locales.length == 0) {
 		return

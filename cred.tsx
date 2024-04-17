@@ -185,6 +185,7 @@ function cred_table(full_render: boolean, values: string[][], props: TableProps)
 			<input type="hidden" name="kind" value={props.kind}></input>
 			{table}
 			</form>
+			<br />
 		</details>
 	}
 
@@ -224,7 +225,7 @@ function invalidate_kind(kind: CredentialKind) {
 
 export function ui_init_cred() {
 	for (const [_, fn] of cred_map) {
-		component_register(fn, 'left')
+		component_register(fn, 'right0')
 	}
 
 	route_register('POST', 'cred_delete', cred_delete)

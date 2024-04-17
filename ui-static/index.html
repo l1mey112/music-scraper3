@@ -34,11 +34,7 @@
 			width: 1px;
 			background-color: #2d2e2e;
 		}
-		#left {
-			flex: 1;
-			padding: 1em;
-		}
-		#right {
+		.enclosure {
 			flex: 1;
 			padding: 1em;
 			overflow-y: auto;
@@ -122,16 +118,40 @@
 		}
 	</style>
 
+	<div class="enclosure" id="left"></div>
+	<div class="splitter"></div>
+	<div class="enclosure">
+		<div id="tab-container">
+			<button class="tab-button" onclick="switch_tab(0)"><pre>Log/Warn/Error</pre></button>
+			<button class="tab-button" onclick="switch_tab(1)"><pre>Credentials/Misc</pre></button>
+			<button class="tab-button" onclick="switch_tab(2)"><pre>Search/List</pre></button>
+		</div>
+		<hr>
+		<div class="tab-content" id="rightlog"></div>
+		<div class="tab-content" id="right0"></div>
+		<div class="tab-content" id="right1"></div>
+	</div>
+
 	<script>
 		// reset all elements inside the two panels
 		addEventListener('htmx:wsConnecting', function(event) {
 			document.querySelector('#left').innerHTML = '';
-			document.querySelector('#right').innerHTML = '';
+			document.querySelector('#rightlog').innerHTML = '';
+			document.querySelector('#right0').innerHTML = '';
+			document.querySelector('#right1').innerHTML = '';
 		});
-	</script>
 
-	<div id="left"></div>
-	<div class="splitter"></div>
-	<div id="right"></div>
+		function switch_tab(idx) {
+			document.querySelectorAll('.tab-content').forEach((tabContent, index) => {
+				if (index === idx) {
+					tabContent.style = '';
+				} else {
+					tabContent.style = 'display: none';
+				}
+			});
+		}
+
+		switch_tab(0);
+	</script>
 </body>
 </html>

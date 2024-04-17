@@ -6,13 +6,14 @@ import { pass_images_download_url_to_hash } from "./passes/images"
 import { pass_sources_download_from_youtube_video_ytdlp } from "./passes/youtube_download"
 import { pass_sources_classify_audio_fingerprint } from "./passes/chromaprint"
 import { pass_links_extrapolate_from_linkcore, pass_links_extrapolate_from_lnk_to } from "./passes/links_distributors"
-import { pass_karent_album_meta_karent_album as pass_album_meta_karent, pass_karent_artist_meta_karent_artist as pass_artist_meta_karent } from "./passes/karent"
+import { pass_karent_album_meta_karent_album, pass_karent_artist_meta_karent_artist } from "./passes/karent"
 import { pass_album_meta_vocadb, pass_artist_meta_vocadb, pass_track_meta_vocadb, pass_track_meta_vocadb_from_youtube } from "./passes/vocadb"
 import { pass_album_meta_spotify, pass_artist_meta_spotify, pass_track_meta_spotify } from "./passes/spotify"
 import { pass_sources_download_from_youtube_video_zotify } from "./passes/spotify_download"
 import { pass_artist_meta_spotify_supplementary } from "./passes/spotify_raw"
 import { pass_artist_classify_auto } from "./passes/classify_artist"
 import { pass_track_classify_artists, pass_track_classify_from_other_tracks, pass_track_classify_from_source_fingerprint } from "./passes/classify_track"
+import { pass_artist_meta_assign } from "./passes/meta_artist"
 
 export const passes: PassElement[] = [
 	[
@@ -23,14 +24,14 @@ export const passes: PassElement[] = [
 				{ name: 'track.meta.vocadb', fn: pass_track_meta_vocadb },
 				{ name: 'track.meta.spotify', fn: pass_track_meta_spotify },
 			],
-			{ name: 'album.meta.karent', fn: pass_album_meta_karent },
+			{ name: 'album.meta.karent', fn: pass_karent_album_meta_karent_album },
 			{ name: 'album.meta.vocadb', fn: pass_album_meta_vocadb },
 			{ name: 'album.meta.spotify', fn: pass_album_meta_spotify },
 		],
 		{ name: 'youtube_channel.extrapolate.from_channel_id', fn: pass_youtube_channel_extrapolate_from_channel_id },
 		{ name: 'youtube_channel.meta.youtube_channel0', fn: pass_youtube_channel_meta_youtube_channel0 },
 		{ name: 'youtube_channel.meta.youtube_channel1', fn: pass_youtube_channel_meta_youtube_channel1 },
-		{ name: 'artist.meta.karent', fn: pass_artist_meta_karent },
+		{ name: 'artist.meta.karent', fn: pass_karent_artist_meta_karent_artist },
 		{ name: 'artist.meta.vocadb', fn: pass_artist_meta_vocadb },
 		{ name: 'artist.meta.spotify', fn: pass_artist_meta_spotify },
 		{ name: 'artist.meta.spotify_artist_supplementary', fn: pass_artist_meta_spotify_supplementary },
@@ -50,4 +51,5 @@ export const passes: PassElement[] = [
 	{ name: 'track.classify.from_source_fingerprint', fn: pass_track_classify_from_source_fingerprint },
 	{ name: 'track.classify.from_other_tracks', fn: pass_track_classify_from_other_tracks },
 	{ name: 'track.classify.artists', fn: pass_track_classify_artists },
+	{ name: 'artist.meta.assign', fn: pass_artist_meta_assign },
 ]

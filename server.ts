@@ -2,7 +2,8 @@ import { ServerWebSocket } from "bun";
 
 // @ts-ignore - need this for autoreloads on edit
 import index from './ui-static/index.html'
-import { MaybePromise } from "./types"
+import { FSRef, MaybePromise } from "./types"
+import { db_fs_hash_path } from "./db_misc";
 
 const js = Bun.file('./ui-static/index.js')
 const font = Bun.file('./ui-static/TerminusTTF.woff2')
@@ -11,7 +12,7 @@ interface ToString {
 	toString(): string
 }
 
-type ContainerOOBId = 'left' | 'right'
+type ContainerOOBId = 'left' | 'rightlog' | 'right0' | 'right1'
 type RenderFn = ToString | ((init: boolean) => MaybePromise<ToString>)
 
 const sockets = new Set<ServerWebSocket>()
@@ -40,8 +41,8 @@ async function component_append(element: RenderFn, targets: Set<ServerWebSocket>
 		element = await element(true)
 	}
 
-	const oob = pane_id == 'left' ? 'beforeend' : 'afterbegin'
-	
+	const oob = pane_id == 'rightlog' ? 'afterbegin' : 'beforeend'
+
 	emit_html(`<div id="${pane_id}" hx-swap-oob="${oob}">${element}</div>`, targets)
 }
 
@@ -114,6 +115,24 @@ Bun.serve<undefined>({
 				}
 				return new Response("400 Bad Request", { status: 400 })
 			}
+			case '/media': {
+				const q = url.searchParams.get('q')
+				if (!q) {
+					return new Response("400 Bad Request", { status: 400 })
+				}
+
+				// don't bother checking if the hash is in the db
+				// its most likely fine
+
+				const path = db_fs_hash_path(q as FSRef)
+				const file = Bun.file(path)
+
+				if (!file.exists) {
+					return new Response("404 Not Found", { status: 404 })
+				}
+
+				return new Response(file)
+			}
 			default: {
 				return new Response("404 Not Found", { status: 404 })
 			}
@@ -132,8 +151,6 @@ Bun.serve<undefined>({
 		message(ws, data) {}
 	},
 })
-
-console.log('server: listening on http://localhost:8080')
 
 // safe invalidated identifiers
 const id_map = new WeakMap<IdRef, boolean>()
@@ -184,7 +201,7 @@ export class ProgressRef {
 		this.message = message
 		this.progress = 0
 
-		components.set(this, 'right')
+		components.set(this, 'rightlog')
 		component_append(this)
 	}
 
@@ -214,7 +231,7 @@ export function emit_log(message: string, level: LogLevel = 'log') {
 		}
 	}
 
-	components.set(elm, 'right')
+	components.set(elm, 'rightlog')
 	component_append(elm)
 }
 
@@ -225,8 +242,24 @@ const log_setup = ['log', 'warn', 'error'] as const
 for (const level of log_setup) {
 	const orig = console[level]
 
-	console[level] = function(obj: any, ...args: any[]) {
-		orig(obj, ...args)
-		emit_log(Array.from(arguments).join(' '), level)
+	console[level] = function log(obj: any, ...args: any[]) {
+		//let prefix = `[${log.caller}]`
+
+		// cant access `caller` in strict mode, use an exception to get the stack trace
+		//let prefix = new Error().stack?.split('\n')[2].trim()
+
+		let prefix = ''
+
+		if (typeof obj === 'string') {
+			args.unshift(prefix + obj)
+		} else {
+			args.unshift(obj)
+			args.unshift(prefix)
+		}
+
+		orig(...args)
+		emit_log(args.join(' '), level)
 	}
 }
+
+console.log('server: listening on http://localhost:8080')

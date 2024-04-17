@@ -35,7 +35,6 @@ export type AlbumTracks<T> = { disc: number, i: number, id: T }[] // usually 1 i
 
 const image_kind_tostring = {
 	yt_thumbnail: 'YouTube Thumbnail',
-	yt_avatar: 'YouTube Avatar',
 	yt_banner: 'YouTube Banner',
 	yt_tv_banner: 'YouTube TV Banner',
 	yt_mobile_banner: 'YouTube Mobile Banner',

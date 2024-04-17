@@ -1,6 +1,7 @@
 import { db_close } from './db'
 import { ui_init_cred } from './cred'
 import { ui_init_pass } from './pass'
+import { ui_init_list } from './list'
 
 function exit() {
 	db_close()
@@ -16,3 +17,4 @@ process.on("SIGTERM", exit)
 
 ui_init_cred()
 ui_init_pass()
+ui_init_list()

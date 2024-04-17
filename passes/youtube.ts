@@ -207,9 +207,8 @@ export async function pass_youtube_channel_meta_youtube_channel0() {
 
 			type ChannelKey = keyof typeof result.images
 
-			// 'yt_avatar' | 'yt_banner' | 'yt_tv_banner' | 'yt_mobile_banner'
 			const img_map: Record<ChannelKey, ImageKind> = {
-				avatar: 'yt_avatar',
+				avatar: 'profile_art',
 				banner: 'yt_banner',
 				tvBanner: 'yt_tv_banner',
 				mobileBanner: 'yt_mobile_banner',

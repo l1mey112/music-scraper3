@@ -1,6 +1,6 @@
 import { index, sqliteTable, text, integer, blob, real, unique, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { WyHash, ImageKind, Ident, YoutubeChannelId, YoutubeVideoId, FSRef, SpotifyArtistId, SpotifyAlbumId, SpotifyTrackId, TrackId, AudioFingerprintId, LinkKind, KarentAlbumId, KarentArtistId, LocalePart, AlbumId, ArtistId, LocaleRef, LinkId, ArtistList, VocaDBSongId, VocaDBAlbumId, VocaDBArtistId, AlbumTracks } from "./types";
-import { sql } from "drizzle-orm";
+import { name, sql } from "drizzle-orm";
 
 // .references(() => youtube_channel.id),
 // these are no-ops in sqlite, they don't create indexes
@@ -23,7 +23,9 @@ export const $album = sqliteTable('album', {
 export const $artist = sqliteTable('artist', {
 	id: integer('id').$type<ArtistId>().primaryKey(),
 
-	// more fields...
+	// name in default locale
+	name: text('name'),
+	profile_image: text('profile_image').$type<FSRef>(),
 })
 
 // TODO: it would be nice to have a nullable `locale` instead of `--`
