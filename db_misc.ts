@@ -17,7 +17,7 @@ if (!existsSync(media_db)) {
 	process.exit(1)
 }
 
-export function db_fs_hash_path(hash: FSRef): string {
+export function fs_hash_path(hash: FSRef): string {
 	// rare
 	if (hash.startsWith("https://") || hash.startsWith("http://")) {
 		throw new Error("hash is a url")
@@ -26,12 +26,12 @@ export function db_fs_hash_path(hash: FSRef): string {
 	return `${media_db}/${shard}/${hash}`
 }
 
-export function db_fs_sharded_lazy_bunfile(dot_ext: string): [BunFile, FSRef] {
-	const [path, hash] = db_fs_sharded_path(dot_ext)
+export function fs_sharded_lazy_bunfile(dot_ext: string): [BunFile, FSRef] {
+	const [path, hash] = fs_sharded_path(dot_ext)
 	return [Bun.file(path), hash]
 }
 
-export function db_fs_sharded_path(dot_ext: string): [string, FSRef] {
+export function fs_sharded_path(dot_ext: string): [string, FSRef] {
 	const hash = (nanoid() + dot_ext) as FSRef
 	const shard = hash.slice(0, 2)
 
@@ -41,11 +41,21 @@ export function db_fs_sharded_path(dot_ext: string): [string, FSRef] {
 
 // append your own extension
 // creates the shard folder
-export function db_fs_sharded_path_noext_nonlazy(): [string, string] {
+export function fs_sharded_path_noext_nonlazy(): [string, string] {
 	const hash = nanoid() as FSRef
 	const shard = hash.slice(0, 2)
 
 	mkdirSync(`${media_db}/${shard}`, { recursive: true })
 
+	return [`${media_db}/${shard}/${hash}`, hash]
+}
+
+export function fs_sharded_path_nonlazy(dot_ext: string): [string, FSRef] {
+	const hash = (nanoid() + dot_ext) as FSRef
+	const shard = hash.slice(0, 2)
+
+	mkdirSync(`${media_db}/${shard}`, { recursive: true })
+
+	// bun automatically creates folders
 	return [`${media_db}/${shard}/${hash}`, hash]
 }

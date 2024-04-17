@@ -5,7 +5,7 @@ import { ProgressRef } from "../server";
 import { zotify_credentials } from "../cred_api";
 import { db_backoff_forever, db_backoff_sql, run_with_concurrency_limit } from "../util";
 import { $ } from 'bun'
-import { db_fs_sharded_path_noext_nonlazy } from "../db_misc";
+import { fs_sharded_path_noext_nonlazy } from "../db_misc";
 import { dirname, basename } from 'path'
 import { FSRef } from "../types";
 
@@ -29,7 +29,7 @@ export async function pass_sources_download_from_youtube_video_zotify() {
 
 	await run_with_concurrency_limit(k, 20, pc, async ({ id }) => {
 		const ident = ident_pk($spotify_track, id)
-		const [path, hash_part] = db_fs_sharded_path_noext_nonlazy()
+		const [path, hash_part] = fs_sharded_path_noext_nonlazy()
 
 		const folder = dirname(path)
 		const file = basename(path)

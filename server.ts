@@ -3,7 +3,7 @@ import { ServerWebSocket } from "bun";
 // @ts-ignore - need this for autoreloads on edit
 import index from './ui-static/index.html'
 import { FSRef, MaybePromise } from "./types"
-import { db_fs_hash_path } from "./db_misc";
+import { fs_hash_path } from "./db_misc";
 
 const js = Bun.file('./ui-static/index.js')
 const font = Bun.file('./ui-static/TerminusTTF.woff2')
@@ -124,7 +124,7 @@ Bun.serve<undefined>({
 				// don't bother checking if the hash is in the db
 				// its most likely fine
 
-				const path = db_fs_hash_path(q as FSRef)
+				const path = fs_hash_path(q as FSRef)
 				const file = Bun.file(path)
 
 				if (!file.exists) {

@@ -1,6 +1,6 @@
 import { FSRef, Ident, ImageKind } from "../types"
 import { db } from "../db"
-import { db_fs_hash_path, db_fs_sharded_lazy_bunfile } from "../db_misc"
+import { fs_hash_path, fs_sharded_lazy_bunfile } from "../db_misc"
 import { sql } from "drizzle-orm"
 import { ProgressRef } from "../server"
 import { mime_ext } from "../mime"
@@ -66,7 +66,7 @@ export async function pass_images_download_url_to_hash() {
 		const needs_dimensions = image.width == 0 || image.height == 0
 
 		const ext = mime_ext(resp.headers.get("content-type"))
-		const [file, new_hash] = db_fs_sharded_lazy_bunfile(ext)
+		const [file, new_hash] = fs_sharded_lazy_bunfile(ext)
 
 		await Bun.write(file, resp)
 
@@ -74,7 +74,7 @@ export async function pass_images_download_url_to_hash() {
 		let new_height = image.height
 
 		if (needs_dimensions) {
-			const size = sizeOf(db_fs_hash_path(new_hash))
+			const size = sizeOf(fs_hash_path(new_hash))
 
 			if (!size.width || !size.height) {
 				// so damn rare

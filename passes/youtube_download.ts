@@ -5,7 +5,7 @@ import { db_backoff_forever, db_backoff_sql, run_with_concurrency_limit } from "
 import { ProgressRef } from "../server"
 import { FSRef, Ident } from "../types"
 import * as YTDlpWrap from "yt-dlp-wrap";
-import { db_fs_sharded_path_noext_nonlazy } from "../db_misc"
+import { fs_sharded_path_noext_nonlazy } from "../db_misc"
 
 // sources.download.from_youtube_video_ytdlp
 export async function pass_sources_download_from_youtube_video_ytdlp() {
@@ -30,7 +30,7 @@ export async function pass_sources_download_from_youtube_video_ytdlp() {
 	// this shouldn't fail, its assumed that the youtube_video table doesn't contain invalid ids
 	await run_with_concurrency_limit(k, 20, pc, async ({ id }) => {
 		const ident = ident_pk($youtube_video, id)
-		const [path, hash_part] = db_fs_sharded_path_noext_nonlazy()
+		const [path, hash_part] = fs_sharded_path_noext_nonlazy()
 
 		type Output = {
 			ext: string

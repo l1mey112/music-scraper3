@@ -7,8 +7,8 @@ sh/killschema.sh
 # update this as needed
 
 stmts=(
-	"insert into youtube_video (id) values ('0qYl0rqLcQs'), ('p-o_bMkzOW0'), ('Or5lCqWyYE8'), ('LnkUf8I8e_U'), ('qj1GooBp0ss'), ('0BYfmmGLm1Y'), ('Y08h2Hk2XD0');"
-	"insert into vocadb_album (id) values (18033)"
+	#"insert into youtube_video (id) values ('0qYl0rqLcQs'), ('p-o_bMkzOW0'), ('Or5lCqWyYE8'), ('LnkUf8I8e_U'), ('qj1GooBp0ss'), ('0BYfmmGLm1Y'), ('Y08h2Hk2XD0');"
+	#"insert into vocadb_album (id) values (18033)"
 	#"insert into spotify_track (id) values ('2HWFwY4LiEqHrZ4lYdyAHG')"
 
 	# cosmo@bousou-p
@@ -16,7 +16,7 @@ stmts=(
 	#"insert into youtube_video (id) values ('XwCv6Gm3Q3Q');"
 
 	# untouchable - hazardous bubble basics
-	#"insert into spotify_track (id) values ('7rL7z9CpB2aXEfmY5AA6VP');"
+	"insert into spotify_track (id) values ('7rL7z9CpB2aXEfmY5AA6VP');"
 )
 
 for stmt in "${stmts[@]}"; do

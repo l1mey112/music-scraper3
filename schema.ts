@@ -11,7 +11,7 @@ export const $track = sqliteTable('track', {
 
 	name: text('name'), // name in default locale
 	artists: text('artists', { mode: 'json' }).$type<ArtistList<ArtistId>>(),
-	audio_source: text('audio_source').$type<FSRef>(), // source of the track
+	audio_source: text('audio_source').$type<FSRef>(), // source of the track, audio or video
 })
 
 // TODO: needs joining table
@@ -27,6 +27,7 @@ export const $album_tracks = sqliteTable('album_tracks', {
 	track_id: integer('track_id').$type<TrackId>().notNull(),
 	disc: integer('disc').notNull(),
 	i: integer('i').notNull(),
+	tagged_audio_source: text('tagged_audio_source').$type<FSRef>(), // tagged source of the track with metadata, audio only
 }, (t) => ({
 	pk: primaryKey({ columns: [t.album_id, t.track_id] }),
 }))

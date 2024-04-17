@@ -14,7 +14,7 @@ export type ArtistId = NewType<'ArtistId', number>
 export type LinkId = NewType<'LinkId', number>
 
 type PassField = 'all' | 'track' | 'album' | 'artist' | 'karent_album' | 'karent_artist' | 'youtube_video' | 'youtube_channel' | 'links' | 'images' | 'sources'
-type PassKind = 'meta' | 'extrapolate' | 'download' | 'classify'
+type PassKind = 'meta' | 'extrapolate' | 'download' | 'classify' | 'tag'
 export type PassIdentifier = `${PassField}.${PassKind}.${string}`
 
 export type Ident = NewType<'Ident', string>

@@ -4,7 +4,7 @@ import { ProgressRef } from "../server"
 import { $ } from 'bun'
 import { db_backoff_forever, db_backoff_sql, run_with_concurrency_limit } from "../util"
 import { $sources } from "../schema"
-import { db_fs_hash_path } from "../db_misc"
+import { fs_hash_path } from "../db_misc"
 import { Ident } from "../types"
 
 // sources.classify.audio_fingerprint
@@ -27,7 +27,7 @@ export async function pass_sources_classify_audio_fingerprint() {
 	await run_with_concurrency_limit(k, 10, pc, async ({ hash }) => {
 		const ident = ('so/' + hash) as Ident
 
-		const fpcalc = await $`fpcalc -algorithm 2 -length 180 -raw -json ${db_fs_hash_path(hash)}`.quiet()
+		const fpcalc = await $`fpcalc -algorithm 2 -length 180 -raw -json ${fs_hash_path(hash)}`.quiet()
 
 		type FpCalc = {
 			duration: number
